@@ -1,3 +1,5 @@
+default: do-demo
+
 DEMO_SRC=demo.rs
 DEMO=$(shell rustc --crate-file-name $(DEMO_SRC))
 
@@ -9,7 +11,9 @@ SDL_INCLUDEDIR=$(SDL_1_2_INSTALL)/include/SDL
 RUST_SDL_LIBDIR=$(HOME)/Dev/Rust/rust-sdl
 
 SDL_MAIN_M=$(SDL_1_2_ROOT)/src/main/macosx/SDLMain.m
-default: $(DEMO)
+
+do-demo: $(DEMO)
+	./$<
 
 $(DEMO): $(DEMO_SRC)
 	rustc -o $@ -g $< -L$(RUST_SDL_LIBDIR) -L$(SDL_LIBDIR) -C link-args=" -I$(SDL_INCLUDEDIR) -framework CoreFoundation -framework CoreGraphics -framework AppKit $(SDL_MAIN_M)  "
