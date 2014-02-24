@@ -129,6 +129,16 @@ impl<T:BoundBox> Bouncing<T> {
     }
 }
 
+impl<T:BoundBox> Bouncing<T> {
+    fn erase_on(&self, screen: &vid::Surface) {
+        screen.fill_rect(Some(sdl::Rect { x: self.x as i16,
+                                          y: self.y as i16,
+                                          w: self.width() as u16,
+                                          h: self.height() as u16, }),
+                         vid::RGB(0,0,0));
+    }
+}
+
 pub fn main(invoker: &str, args: &[~str]) {
     println!("running {} args: {}", invoker, args);
 
@@ -164,18 +174,12 @@ pub fn main(invoker: &str, args: &[~str]) {
 
         // screen.clear();
 
-        screen.fill_rect(Some(sdl::Rect { x: shape2.x as i16,
-                                          y: shape2.y as i16,
-                                          w: shape2.obj.width as u16,
-                                          h: shape2.obj.height as u16, }),
-                         vid::RGB(0,0,0));
-        screen.fill_rect(Some(sdl::Rect { x: shape.x as i16,
-                                          y: shape.y as i16,
-                                          w: shape2.obj.width as u16,
-                                          h: shape2.obj.height as u16 }),
-                         vid::RGB(0,0,0));
+        shape2.erase_on(screen);
+        shape.erase_on(screen);
+
         shape.tick();
         shape2.tick();
+
         screen.blit_at(shape2.obj.surface, shape2.x as i16, shape2.y as i16);
         screen.blit_at(shape.obj.surface, shape.x as i16, shape.y as i16);
 
