@@ -3,6 +3,8 @@
 extern crate native;
 extern crate sdl;
 
+use std::os;
+
 use evt = sdl::event;
 use vid = sdl::video;
 use sdl::event::{QuitEvent, KeyEvent, NoEvent};
@@ -11,6 +13,21 @@ use Motion = sdl::event::MouseMotionEvent;
 #[no_mangle]
 pub extern "C" fn SDL_main(argc: int, argv: **u8) {
     native::start(argc, argv, proc() {
+            let args = os::args();
+            println!("os args: {}", args);
+            if args.contains(&~"testsprite") {
+                testsprite();
+            } else {
+                default();
+            }
+        });
+}
+
+fn testsprite() {
+    fail!("testsprite unimplemented");
+}
+
+fn default() {
             sdl::init([sdl::InitVideo, sdl::InitTimer]);
             sdl::wm::set_caption("rust-sdl demo - video", "rust-sdl");
             let screen = vid::set_video_mode
@@ -44,5 +61,4 @@ pub extern "C" fn SDL_main(argc: int, argv: **u8) {
                 screen.flip();
             }
             println!("Hello World");
-        });
 }
