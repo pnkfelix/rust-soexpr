@@ -127,8 +127,8 @@ pub fn main(invoker: &str, args: &[~str]) {
             => fail!("Couldn't set {}x{} video mode: {}", width, height, why),
     };
 
-    let shape  = Shape::circle(50, (0xF0u8, 0x20u8, 0x30u8));
-    let shape2 = Shape::circle(50, (0x10u8, 0xA0u8, 0xB0u8));
+    let shape  = Shape::circle(10, (0xF0u8, 0x20u8, 0x30u8));
+    let shape2 = Shape::circle(10, (0x10u8, 0xA0u8, 0xB0u8));
 
     let mut shape = Moving::new(shape, (300, 0), (1, 2));
     let mut shape2 = Moving::new(shape2, (0, 20), (-4, 3));
@@ -140,7 +140,7 @@ pub fn main(invoker: &str, args: &[~str]) {
 
     loop {
         frames += 1;
-        if frames > 100 { break; }
+        if frames > 1000 { break; }
         x = x % width as i16;
         y = y % height as i16;
 
