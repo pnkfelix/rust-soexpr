@@ -139,6 +139,12 @@ impl<T:BoundBox> Bouncing<T> {
     }
 }
 
+impl Bouncing<Shape> {
+    fn draw_on(&self, screen: &vid::Surface) {
+        screen.blit_at(self.obj.surface, self.x as i16, self.y as i16);
+    }
+}
+
 pub fn main(invoker: &str, args: &[~str]) {
     println!("running {} args: {}", invoker, args);
 
@@ -180,8 +186,8 @@ pub fn main(invoker: &str, args: &[~str]) {
         shape.tick();
         shape2.tick();
 
-        screen.blit_at(shape2.obj.surface, shape2.x as i16, shape2.y as i16);
-        screen.blit_at(shape.obj.surface, shape.x as i16, shape.y as i16);
+        shape2.draw_on(screen);
+        shape.draw_on(screen);
 
         screen.flip();
         match evt::poll_event() {
