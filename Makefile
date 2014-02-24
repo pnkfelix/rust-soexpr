@@ -1,4 +1,4 @@
-default: do-demo
+default: soe # do-demo
 
 DEMO_SRC=demo.rs
 DEMO_DEPS=$(wildcard *.rs tests/*.rs)
@@ -18,6 +18,9 @@ SDL_MAIN_M=$(SDL_1_2_ROOT)/src/main/macosx/SDLMain.m
 
 do-demo: $(DEMO)-dbg $(DEMO)
 	./$<
+
+soe: $(DEMO)-dbg $(DEMO)
+	./$< $@
 
 testsprite: $(DEMO)-dbg $(DEMO)
 	./$< $@
