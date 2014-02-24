@@ -10,7 +10,7 @@ static video_bpp: int = 32;
 enum RGBorA { R = 0, G = 1, B = 2, A = 3 }
 
 fn new_shape(w: int, h: int, f: |int, int, RGBorA| -> u8) -> ~vid::Surface {
-    let shape = vid::Surface::new([], w, h, video_bpp,
+    let shape = vid::Surface::new([vid::HWSurface], w, h, video_bpp,
                                   // Following mask values indicate
                                   // how each of {R,G,B,A} should be
                                   // extracted from the bits for a
@@ -57,16 +57,19 @@ fn new_circle(w:int, h:int, radius:int, (r,g,b): (u8,u8,u8)) -> ~vid::Surface {
         })
 }
 
+static video_flags : (&'static [vid::SurfaceFlag],
+                      &'static [vid::VideoFlag])   = (&[vid::HWSurface],
+                                                      &[vid::AnyFormat]);
+
 pub fn main(invoker: &str, args: &[~str]) {
     println!("running {} args: {}", invoker, args);
 
-    let videoflags = (~[vid::SWSurface], ~[vid::AnyFormat]);
     sdl::init([sdl::InitVideo])
         || fail!("Couldn't initialize SDL: {}", sdl::get_error());
 
     let screen = vid::set_video_mode(width, height, video_bpp,
-                                     videoflags.ref0().as_slice(),
-                                     videoflags.ref1().as_slice());
+                                     video_flags.ref0().as_slice(),
+                                     video_flags.ref1().as_slice());
 
     let screen = match screen {
         Ok(s) => s,
