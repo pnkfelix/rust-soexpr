@@ -85,7 +85,7 @@ fn new_circle(w:int, h:int, radius:int, (r,g,b): (u8,u8,u8)) -> ~vid::Surface {
 static video_flags : (&'static [vid::SurfaceFlag],
                       &'static [vid::VideoFlag])   = (&[vid::HWSurface],
                                                       &[vid::AnyFormat]);
-struct Moving<T> {
+struct Bouncing<T> {
     obj: T,
     x: int,
     y: int,
@@ -93,9 +93,9 @@ struct Moving<T> {
     dy: int,  // per tick
 }
 
-impl<T> Moving<T> {
-    fn new(obj: T, (x,y): (int,int), (dx,dy): (int, int)) -> Moving<T> {
-        Moving { obj: obj, x: x, y: y, dx: dx, dy: dy }
+impl<T> Bouncing<T> {
+    fn new(obj: T, (x,y): (int,int), (dx,dy): (int, int)) -> Bouncing<T> {
+        Bouncing { obj: obj, x: x, y: y, dx: dx, dy: dy }
     }
 
     fn tick(&mut self) {
@@ -106,8 +106,8 @@ impl<T> Moving<T> {
     }
 
     #[cfg(not_used_yet)]
-    fn next(self) -> Moving<T> {
-        Moving { x: self.x + self.dx, y: self.y + self.dy, .. self }
+    fn next(self) -> Bouncing<T> {
+        Bouncing { x: self.x + self.dx, y: self.y + self.dy, .. self }
     }
 }
 
@@ -130,8 +130,8 @@ pub fn main(invoker: &str, args: &[~str]) {
     let shape  = Shape::circle(10, (0xF0u8, 0x20u8, 0x30u8));
     let shape2 = Shape::circle(10, (0x10u8, 0xA0u8, 0xB0u8));
 
-    let mut shape = Moving::new(shape, (300, 0), (1, 2));
-    let mut shape2 = Moving::new(shape2, (0, 20), (-4, 3));
+    let mut shape = Bouncing::new(shape, (300, 0), (1, 2));
+    let mut shape2 = Bouncing::new(shape2, (0, 20), (-4, 3));
 
     let (mut x, mut y) = (0i16, 0i16);
 
