@@ -16,10 +16,12 @@ RUST_SDL_LIBDIR=$(HOME)/Dev/Rust/rust-sdl/objdir-opt
 
 SDL_MAIN_M=$(SDL_1_2_ROOT)/src/main/macosx/SDLMain.m
 
-do-demo: $(DEMO)-dbg $(DEMO)
+#do-demo: $(DEMO)-dbg $(DEMO)
+do-demo: $(DEMO)-dbg
 	./$<
 
-soe: $(DEMO)-dbg $(DEMO)
+#soe: $(DEMO)-dbg $(DEMO)
+soe: $(DEMO)-dbg
 	./$< $@
 
 testsprite: $(DEMO)-dbg $(DEMO)
