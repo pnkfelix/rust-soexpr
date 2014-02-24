@@ -104,6 +104,11 @@ struct Bouncing<T> {
     dy: int,  // per tick
 }
 
+impl<T:BoundBox> BoundBox for Bouncing<T> {
+    fn width(&self) -> int { self.obj.width() }
+    fn height(&self) -> int { self.obj.height() }
+}
+
 impl<T:BoundBox> Bouncing<T> {
     fn new(obj: T, (x,y): (int,int), (dx,dy): (int, int)) -> Bouncing<T> {
         Bouncing { obj: obj, x: x, y: y, dx: dx, dy: dy }
@@ -112,8 +117,8 @@ impl<T:BoundBox> Bouncing<T> {
     fn tick(&mut self) {
         let x2 = self.x + self.dx;
         let y2 = self.y + self.dy;
-        let outside_x = x2 < 0 || x2 + self.obj.width() > width;
-        let outside_y = y2 < 0 || y2 + self.obj.height() > height;
+        let outside_x = x2 < 0 || x2 + self.width() > width;
+        let outside_y = y2 < 0 || y2 + self.height() > height;
         if outside_x { self.dx = -self.dx; } else { self.x  = x2; }
         if outside_y { self.dy = -self.dy; } else { self.y  = y2; }
     }
