@@ -9,6 +9,20 @@ static video_bpp: int = 32;
 #[deriving(Eq)]
 enum RGBorA { R = 0, G = 1, B = 2, A = 3 }
 
+struct Shape {
+    surface: ~vid::Surface,
+    width: int,
+    height: int,
+}
+
+impl Shape {
+    fn new(w: int, h: int, f: |int, int, RGBorA| -> u8) -> Shape {
+        Shape { surface: new_shape(w, h, f),
+                width: w,
+                height: h }
+    }
+}
+
 fn new_shape(w: int, h: int, f: |int, int, RGBorA| -> u8) -> ~vid::Surface {
     let shape = vid::Surface::new([vid::HWSurface], w, h, video_bpp,
                                   // Following mask values indicate
@@ -41,6 +55,14 @@ fn new_shape(w: int, h: int, f: |int, int, RGBorA| -> u8) -> ~vid::Surface {
     shape
 }
 
+impl Shape {
+    fn circle(w: int, h: int, radius: int, rgb@(r,g,b): (u8,u8,u8)) -> Shape {
+        Shape { surface: new_circle(w, h, radius, rgb),
+                width: w,
+                height: h }
+    }
+}
+
 fn new_circle(w:int, h:int, radius:int, (r,g,b): (u8,u8,u8)) -> ~vid::Surface {
     let w_2 = w/2;
     let h_2 = h/2;
@@ -60,7 +82,6 @@ fn new_circle(w:int, h:int, radius:int, (r,g,b): (u8,u8,u8)) -> ~vid::Surface {
 static video_flags : (&'static [vid::SurfaceFlag],
                       &'static [vid::VideoFlag])   = (&[vid::HWSurface],
                                                       &[vid::AnyFormat]);
-
 struct Moving<T> {
     obj: T,
     x: int,
@@ -102,8 +123,8 @@ pub fn main(invoker: &str, args: &[~str]) {
             => fail!("Couldn't set {}x{} video mode: {}", width, height, why),
     };
 
-    let shape  = new_circle(100, 100, 50, (0xF0u8, 0x20u8, 0x30u8));
-    let shape2 = new_circle(100, 100, 50, (0x10u8, 0xA0u8, 0xB0u8));
+    let shape  = Shape::circle(100, 100, 50, (0xF0u8, 0x20u8, 0x30u8));
+    let shape2 = Shape::circle(100, 100, 50, (0x10u8, 0xA0u8, 0xB0u8));
 
     let mut shape = Moving::new(shape, (300, 0), (1, 2));
     let mut shape2 = Moving::new(shape2, (0, 20), (-4, 3));
@@ -123,16 +144,18 @@ pub fn main(invoker: &str, args: &[~str]) {
 
         screen.fill_rect(Some(sdl::Rect { x: shape2.x as i16,
                                           y: shape2.y as i16,
-                                          w: 100,
-                                          h: 100 }), vid::RGB(0,0,0));
+                                          w: shape2.obj.width as u16,
+                                          h: shape2.obj.height as u16, }),
+                         vid::RGB(0,0,0));
         screen.fill_rect(Some(sdl::Rect { x: shape.x as i16,
                                           y: shape.y as i16,
-                                          w: 100,
-                                          h: 100 }), vid::RGB(0,0,0));
+                                          w: shape2.obj.width as u16,
+                                          h: shape2.obj.height as u16 }),
+                         vid::RGB(0,0,0));
         shape.tick();
         shape2.tick();
-        screen.blit_at(shape2.obj, shape2.x as i16, shape2.y as i16);
-        screen.blit_at(shape.obj, shape.x as i16, shape.y as i16);
+        screen.blit_at(shape2.obj.surface, shape2.x as i16, shape2.y as i16);
+        screen.blit_at(shape.obj.surface, shape.x as i16, shape.y as i16);
 
         screen.flip();
         match evt::poll_event() {
