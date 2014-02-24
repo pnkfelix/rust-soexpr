@@ -14,9 +14,9 @@ use Motion = sdl::event::MouseMotionEvent;
 pub extern "C" fn SDL_main(argc: int, argv: **u8) {
     native::start(argc, argv, proc() {
             let args = os::args();
-            println!("os args: {}", args);
-            if args.contains(&~"testsprite") {
-                tests::testsprite::main();
+            if args.len() >= 2 && args[1] == ~"testsprite" {
+                tests::testsprite::main(format!("{} {}", args[0], args[1]),
+                                        args.slice_from(2));
             } else {
                 default();
             }
