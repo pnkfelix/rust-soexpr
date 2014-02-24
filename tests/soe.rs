@@ -85,6 +85,17 @@ fn new_circle(w:int, h:int, radius:int, (r,g,b): (u8,u8,u8)) -> ~vid::Surface {
 static video_flags : (&'static [vid::SurfaceFlag],
                       &'static [vid::VideoFlag])   = (&[vid::HWSurface],
                                                       &[vid::AnyFormat]);
+
+trait BoundBox {
+    fn width(&self) -> int;
+    fn height(&self) -> int;
+}
+
+impl BoundBox for Shape {
+    fn width(&self) -> int { self.width }
+    fn height(&self) -> int { self.height }
+}
+
 struct Bouncing<T> {
     obj: T,
     x: int,
@@ -93,7 +104,7 @@ struct Bouncing<T> {
     dy: int,  // per tick
 }
 
-impl<T> Bouncing<T> {
+impl<T:BoundBox> Bouncing<T> {
     fn new(obj: T, (x,y): (int,int), (dx,dy): (int, int)) -> Bouncing<T> {
         Bouncing { obj: obj, x: x, y: y, dx: dx, dy: dy }
     }
@@ -101,8 +112,10 @@ impl<T> Bouncing<T> {
     fn tick(&mut self) {
         let x2 = self.x + self.dx;
         let y2 = self.y + self.dy;
-        if x2 < 0 || x2 + 100 > width { self.dx = -self.dx; } else { self.x  = x2; }
-        if y2 < 0 || y2 + 100 > height { self.dy = -self.dy; } else { self.y  = y2; }
+        let outside_x = x2 < 0 || x2 + self.obj.width() > width;
+        let outside_y = y2 < 0 || y2 + self.obj.height() > height;
+        if outside_x { self.dx = -self.dx; } else { self.x  = x2; }
+        if outside_y { self.dy = -self.dy; } else { self.y  = y2; }
     }
 
     #[cfg(not_used_yet)]
