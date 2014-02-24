@@ -16,6 +16,7 @@ struct Shape {
 }
 
 impl Shape {
+    #[cfg(not_used_yet)]
     fn new(w: int, h: int, f: |int, int, RGBorA| -> u8) -> Shape {
         Shape { surface: new_shape(w, h, f),
                 width: w,
@@ -56,7 +57,9 @@ fn new_shape(w: int, h: int, f: |int, int, RGBorA| -> u8) -> ~vid::Surface {
 }
 
 impl Shape {
-    fn circle(w: int, h: int, radius: int, rgb@(r,g,b): (u8,u8,u8)) -> Shape {
+    fn circle(radius: int, rgb: (u8,u8,u8)) -> Shape {
+        let w = radius*2;
+        let h = radius*2;
         Shape { surface: new_circle(w, h, radius, rgb),
                 width: w,
                 height: h }
@@ -102,6 +105,7 @@ impl<T> Moving<T> {
         if y2 < 0 || y2 + 100 > height { self.dy = -self.dy; } else { self.y  = y2; }
     }
 
+    #[cfg(not_used_yet)]
     fn next(self) -> Moving<T> {
         Moving { x: self.x + self.dx, y: self.y + self.dy, .. self }
     }
@@ -123,8 +127,8 @@ pub fn main(invoker: &str, args: &[~str]) {
             => fail!("Couldn't set {}x{} video mode: {}", width, height, why),
     };
 
-    let shape  = Shape::circle(100, 100, 50, (0xF0u8, 0x20u8, 0x30u8));
-    let shape2 = Shape::circle(100, 100, 50, (0x10u8, 0xA0u8, 0xB0u8));
+    let shape  = Shape::circle(50, (0xF0u8, 0x20u8, 0x30u8));
+    let shape2 = Shape::circle(50, (0x10u8, 0xA0u8, 0xB0u8));
 
     let mut shape = Moving::new(shape, (300, 0), (1, 2));
     let mut shape2 = Moving::new(shape2, (0, 20), (-4, 3));
