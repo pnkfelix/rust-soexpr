@@ -16,15 +16,15 @@ pub extern "C" fn SDL_main(argc: int, argv: **u8) {
             let args = os::args();
             println!("os args: {}", args);
             if args.contains(&~"testsprite") {
-                testsprite();
+                tests::testsprite::main();
             } else {
                 default();
             }
         });
 }
 
-fn testsprite() {
-    fail!("testsprite unimplemented");
+mod tests {
+    pub mod testsprite;
 }
 
 fn default() {
