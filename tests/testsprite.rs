@@ -28,8 +28,6 @@ struct VideoMode {
 }
 
 fn load_sprite(file: Path) -> ~vid::Surface {
-    let temp;
-
     let sprite = match vid::Surface::from_bmp(&file) {
         Ok(s) => s,
         Err(why) => fail!("Couldn't load {}: {}", file.display(), why),
@@ -43,8 +41,8 @@ fn load_sprite(file: Path) -> ~vid::Surface {
         }
     }
 
-    temp = sprite.display_format();
-    let temp = match temp {
+    let temp = sprite.display_format();
+    match temp {
         Ok(t) => t,
         Err(why) => fail!("Couldn't convert background {}", why),
     };
@@ -80,7 +78,7 @@ fn move_sprites(c: &mut Context, screen: &vid::Surface, background: vid::Color) 
     // SDL_Rect area, *position, *velocity;
 
     // Erase all the sprites if necessary
-    if ( c.sprites_visible ) {
+    if c.sprites_visible {
         screen.fill_rect(None, background);
     }
 
@@ -89,12 +87,12 @@ fn move_sprites(c: &mut Context, screen: &vid::Surface, background: vid::Color) 
         let position = &mut c.positions[i];
         let velocity = &mut c.velocities[i];
         position.x += velocity.x;
-        if ( (position.x < 0) || (position.x as u16 >= (c.screen_w - c.sprite_w)) ) {
+        if (position.x < 0) || (position.x as u16 >= (c.screen_w - c.sprite_w)) {
             velocity.x = -velocity.x;
             position.x += velocity.x;
         }
         position.y += velocity.y;
-        if ( (position.y < 0) || (position.y as u16 >= (c.screen_h - c.sprite_w)) ) {
+        if (position.y < 0) || (position.y as u16 >= (c.screen_h - c.sprite_w)) {
             velocity.y = -velocity.y;
             position.y += velocity.y;
         }
@@ -105,7 +103,7 @@ fn move_sprites(c: &mut Context, screen: &vid::Surface, background: vid::Color) 
         c.sprite_rects.push(*area);
     }
 
-    if (c.debug_flip) {
+    if c.debug_flip {
         if flag_has(screen, vid::DoubleBuf as uint) {
             let color = vid::RGB(255, 0, 0);
             let r = sdl::Rect {
@@ -267,7 +265,7 @@ pub fn main(invoker: &str, args: &[~str]) {
     let random_x = || { random::<i16>() % (screen_w as u16 - sprite_w) as i16 };
     let random_y = || { random::<i16>() % (screen_h as u16 - sprite_h) as i16 };
 
-    for i in range(0, numsprites) {
+    for _ in range(0, numsprites) {
         positions.push(sdl::Rect { x: random_x(),
                                    y: random_y(),
                                    w: sprite_w as u16,
@@ -346,7 +344,7 @@ pub fn main(invoker: &str, args: &[~str]) {
 
         // Print out some timing information
         now = sdl::get_ticks();
-        if ( now > then ) {
+        if now > then {
             println!("{:2.2f} frames per second\n",
                      (frames as f64 * 1000.0)/(now-then) as f64);
         }
@@ -396,28 +394,23 @@ mod video_flags {
         fn sides_mut<'a>(&'a mut self) -> (&'a mut L, &'a mut R);
 
         fn left_mut<'a>(&'a mut self) -> &'a mut L {
-            let (l, _) = self.sides_mut();
-            l
+            self.sides_mut().val0()
         }
         fn right_mut<'a>(&'a mut self) -> &'a mut R {
-            let (_, r) = self.sides_mut();
-            r
+            self.sides_mut().val1()
         }
 
         fn left<'a>(&'a self) -> &'a L {
-            let (l, _) = self.sides();
-            l
+            self.sides().val0()
         }
         fn right<'a>(&'a self) -> &'a R {
-            let (_, r) = self.sides();
-            r
+            self.sides().val1()
         }
     }
 
     impl<L,R> Sided<L,R> for (L, R) {
         fn sides<'a>(&'a self) -> (&'a L, &'a R) {
-            let &(ref l, ref r) = self;
-            (l, r)
+            (self.ref0(), self.ref1())
         }
 
         fn sides_mut<'a>(&'a mut self) -> (&'a mut L, &'a mut R) {
