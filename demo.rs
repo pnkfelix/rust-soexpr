@@ -23,9 +23,12 @@ pub extern "C" fn SDL_main(argc: int, argv: **u8) {
 }
 
 fn dispatch(driver: &str, variant: &str, args: &[~str]) {
+    let invoker = format!("{} {}", driver, variant);
     match variant {
         "testsprite"
-            => tests::testsprite::main(format!("{} {}", driver, variant), args),
+            => tests::testsprite::main(invoker, args),
+        "soe"
+            => tests::soe::main(invoker, args),
         _otherwise
             => default(),
     }
@@ -33,6 +36,7 @@ fn dispatch(driver: &str, variant: &str, args: &[~str]) {
 
 mod tests {
     pub mod testsprite;
+    pub mod soe;
 }
 
 fn default() {
