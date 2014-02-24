@@ -172,6 +172,8 @@ pub fn main(invoker: &str, args: &[~str]) {
     let mut frames = 0;
     let then = sdl::get_ticks();
 
+    let mut shapes = [shape2, shape];
+
     loop {
         frames += 1;
         if frames > 1000 { break; }
@@ -180,14 +182,17 @@ pub fn main(invoker: &str, args: &[~str]) {
 
         // screen.clear();
 
-        shape2.erase_on(screen);
-        shape.erase_on(screen);
+        for s in shapes.iter() {
+            s.erase_on(screen);
+        }
 
-        shape.tick();
-        shape2.tick();
+        for s in shapes.mut_iter() {
+            s.tick();
+        }
 
-        shape2.draw_on(screen);
-        shape.draw_on(screen);
+        for s in shapes.iter() {
+            s.draw_on(screen);
+        }
 
         screen.flip();
         match evt::poll_event() {
