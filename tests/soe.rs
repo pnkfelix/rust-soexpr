@@ -161,14 +161,15 @@ pub fn main(invoker: &str, args: &[~str]) {
             => fail!("Couldn't set {}x{} video mode: {}", width, height, why),
     };
 
-    let circle = |num:int| {
-        Shape::circle(10, (((num << 4) | (num >> 4)) as u8,
-                           ((num << 2) | (num >> 2)) as u8,
-                           num as u8))
+    let circle = |radius: int, color_basis:int| {
+        let num = color_basis;
+        Shape::circle(radius, (((num << 4) | (num >> 4)) as u8,
+                               ((num << 2) | (num >> 2)) as u8,
+                               num as u8))
     };
 
-    let shape  = circle(0x1234);
-    let shape2 = circle(0xF0DC);
+    let shape  = circle(30, 0x1234);
+    let shape2 = circle(30, 0xF0DC);
 
     let mut shape = Bouncing::new(shape, (300, 0), (1, 2));
     let mut shape2 = Bouncing::new(shape2, (0, 20), (-4, 3));
@@ -205,7 +206,7 @@ pub fn main(invoker: &str, args: &[~str]) {
             evt::KeyEvent(evt::EscapeKey, _, _, _) | evt::QuitEvent => break,
             evt::NoEvent => {}
             evt::MouseMotionEvent(_, x, y, _x_rel, _y_rel) => {
-                shapes.push(Bouncing::new(circle(frames),
+                shapes.push(Bouncing::new(circle(10, frames),
                                           (x as int, y as int),
                                           (frames % 3, -(frames % 4))));
             }
