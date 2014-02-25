@@ -171,8 +171,8 @@ pub fn main(invoker: &str, args: &[~str]) {
     let shape  = circle(30, 0x1234);
     let shape2 = circle(30, 0xF0DC);
 
-    let mut shape = Bouncing::new(shape, (300, 0), (1, 2));
-    let mut shape2 = Bouncing::new(shape2, (0, 20), (-4, 3));
+    let shape = Bouncing::new(shape, (300, 0), (1, 2));
+    let shape2 = Bouncing::new(shape2, (0, 20), (-4, 3));
 
     let (mut x, mut y) = (0i16, 0i16);
 
