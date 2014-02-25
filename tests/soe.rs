@@ -1,5 +1,4 @@
-use std::num::{Zero, One};
-use std::cmp::Ord;
+use std::cmp;
 
 use sdl;
 use vid = sdl::video;
@@ -166,14 +165,19 @@ struct Tortoise {
     ddy: f32,
 }
 
+fn clamp<N:Num+cmp::Ord>(val:N, lower:N, upper:N) -> N {
+    cmp::max(lower, cmp::min(upper, val))
+}
+
 impl Tortoise {
     fn new() -> Tortoise {
-        Tortoise { ticks: 0, head: (0.0,20.0), x: 0, y: 0, ddx: 0.3, ddy: -0.2 }
+        Tortoise { ticks: 0, head: (0.0,2.0), x: 0, y: 0, ddx: 0.07, ddy: -0.02 }
     }
 
     fn shape(&self) -> Shape {
         let (h_dx, h_dy) = self.head;
-        let (h_dx, h_dy) = (h_dx as int, h_dy as int);
+        let (h_dx, h_dy) = ((h_dx * 5.0) as int, (h_dy * 5.0) as int);
+        let (h_dx, h_dy) = (clamp(h_dx, -27, 27), clamp(h_dy, -27, 27));
         let head_radius = 15;
         let body_radius = 20;
         let w = head_radius*2 + body_radius*2 + h_dx.abs();
@@ -186,8 +190,9 @@ impl Tortoise {
                 let h_dy = h_ctr_y - j;
                 let b_dx = w_2 - i;
                 let b_dy = h_2 - j;
-                if (h_dx*h_dx + h_dy*h_dy < head_radius*head_radius ||
-                    b_dx*b_dx + b_dy*b_dy < body_radius*body_radius) {
+                if (c == G || c == A) &&
+                    (h_dx*h_dx + h_dy*h_dy < head_radius*head_radius ||
+                     b_dx*b_dx + b_dy*b_dy < body_radius*body_radius) {
                     255
                 } else {
                     0
@@ -230,20 +235,15 @@ impl Turtle for Tortoise {
         let (mut dx, mut dy) = self.head;
         let (x2, y2) = (self.x + dx as int, self.y + dy as int);
 
-        fn reset_unit<N:Num+Ord>(x:N) -> N {
-            let n: N = One::one();
-            if x > Zero::zero() { -n } else { n } 
-        }
-
         if x2 < 0 || (x2 + self.width() > width) {
-            dx = reset_unit(dx);
+            dx /= 1.3;
             self.ddx = -self.ddx;
         } else {
             self.x = x2;
             dx += self.ddx;
         }
         if y2 < 0 || (y2 + self.height() > height) {
-            dy = reset_unit(dy);
+            dy /= 1.3;
             self.ddy = -self.ddy;
         } else {
             self.y = y2;
@@ -288,7 +288,7 @@ pub fn main(invoker: &str, args: &[~str]) {
                                num as u8))
     };
 
-    let shape  = circle(30, 0x1234);
+    let shape  = circle(30, 0xA32C);
     let shape2 = circle(30, 0xF0DC);
 
     let shape = Bouncing::new(shape, (300, 0), (1, 2));
