@@ -1,3 +1,6 @@
+use std::num::{Zero, One};
+use std::cmp::Ord;
+
 use sdl;
 use vid = sdl::video;
 use evt = sdl::event;
@@ -16,7 +19,6 @@ struct Shape {
 }
 
 impl Shape {
-    #[cfg(not_used_yet)]
     fn new(w: int, h: int, f: |int, int, RGBorA| -> u8) -> Shape {
         Shape { surface: new_shape(w, h, f),
                 width: w,
@@ -84,7 +86,8 @@ fn new_circle(w:int, h:int, radius:int, (r,g,b): (u8,u8,u8)) -> ~vid::Surface {
 
 static video_flags : (&'static [vid::SurfaceFlag],
                       &'static [vid::VideoFlag])   = (&[vid::HWSurface],
-                                                      &[vid::AnyFormat]);
+                                                      &[vid::AnyFormat,
+                                                        vid::DoubleBuf]);
 
 trait BoundBox {
     fn width(&self) -> int;
@@ -154,7 +157,100 @@ impl<T:BoundBox> Bouncing<T> {
     }
 }
 
-impl<T:BoundBox> Bouncing<T> {
+struct Tortoise {
+    ticks: int,
+    head: (f32, f32),
+    x: int,
+    y: int,
+    ddx: f32,
+    ddy: f32,
+}
+
+impl Tortoise {
+    fn new() -> Tortoise {
+        Tortoise { ticks: 0, head: (0.0,20.0), x: 0, y: 0, ddx: 0.3, ddy: -0.2 }
+    }
+
+    fn shape(&self) -> Shape {
+        let (h_dx, h_dy) = self.head;
+        let (h_dx, h_dy) = (h_dx as int, h_dy as int);
+        let head_radius = 15;
+        let body_radius = 20;
+        let w = head_radius*2 + body_radius*2 + h_dx.abs();
+        let h = head_radius*2 + body_radius*2 + h_dy.abs();
+        let w_2 = w/2;
+        let h_2 = h/2;
+        let (h_ctr_x, h_ctr_y) = (w_2 + h_dx, h_2 + h_dy);
+        Shape::new(w, h, |i, j, c| { 
+                let h_dx = h_ctr_x - i;
+                let h_dy = h_ctr_y - j;
+                let b_dx = w_2 - i;
+                let b_dy = h_2 - j;
+                if (h_dx*h_dx + h_dy*h_dy < head_radius*head_radius ||
+                    b_dx*b_dx + b_dy*b_dy < body_radius*body_radius) {
+                    255
+                } else {
+                    0
+                }
+            })
+    }
+}
+
+impl Tortoise {
+    fn x(&self) -> int {
+        self.x
+    }
+
+    fn y(&self) -> int {
+        self.y
+    }
+}
+
+impl BoundBox for Tortoise {
+    fn width(&self) -> int { self.shape().width }
+    fn height(&self) -> int { self.shape().height }
+}
+
+impl Marking for Tortoise {
+    fn erase_on(&self, screen: &vid::Surface) {
+        screen.fill_rect(Some(sdl::Rect { x: self.x() as i16,
+                                          y: self.y() as i16,
+                                          w: self.width() as u16,
+                                          h: self.height() as u16, }),
+                         vid::RGB(0,0,0));
+    }
+    fn draw_on(&self, screen: &vid::Surface) {
+        screen.blit_at(self.shape().surface, self.x() as i16, self.y() as i16);
+    }
+}
+
+impl Turtle for Tortoise {
+    fn tick(&mut self) {
+        self.ticks += 1;
+        let (mut dx, mut dy) = self.head;
+        let (x2, y2) = (self.x + dx as int, self.y + dy as int);
+
+        fn reset_unit<N:Num+Ord>(x:N) -> N {
+            let n: N = One::one();
+            if x > Zero::zero() { -n } else { n } 
+        }
+
+        if x2 < 0 || (x2 + self.width() > width) {
+            dx = reset_unit(dx);
+            self.ddx = -self.ddx;
+        } else {
+            self.x = x2;
+            dx += self.ddx;
+        }
+        if y2 < 0 || (y2 + self.height() > height) {
+            dy = reset_unit(dy);
+            self.ddy = -self.ddy;
+        } else {
+            self.y = y2;
+            dy += self.ddy;
+        }
+        self.head = (dx, dy);
+    }
 }
 
 trait Visible {
@@ -163,9 +259,6 @@ trait Visible {
     fn draw_at(&self, screen: &vid::Surface, x: i16, y: i16) {
         screen.blit_at(self.surface(), x, y);
     }
-}
-
-impl<V:Visible> Bouncing<V> {
 }
 
 impl Visible for Shape {
@@ -208,6 +301,9 @@ pub fn main(invoker: &str, args: &[~str]) {
 
     let mut shapes = ~[~shape2 as ~Turtle, ~shape as ~Turtle];
 
+    let turtle = Tortoise::new();
+    shapes.push(~turtle as ~Turtle);
+
     loop {
         frames += 1;
         if frames > 1000 { break; }
@@ -241,10 +337,11 @@ pub fn main(invoker: &str, args: &[~str]) {
             evt::MouseButtonEvent(_, _, _x, _y) => {
                 let shape0 = shapes.shift().unwrap();
                 let shape1 = shapes.shift().unwrap();
+                let shape2 = shapes.shift().unwrap();
                 for s in shapes.iter() {
                     s.erase_on(screen);
                 }
-                shapes = ~[shape0, shape1];
+                shapes = ~[shape0, shape1, shape2];
             }
             _ => {}
         }
