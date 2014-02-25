@@ -161,8 +161,14 @@ pub fn main(invoker: &str, args: &[~str]) {
             => fail!("Couldn't set {}x{} video mode: {}", width, height, why),
     };
 
-    let shape  = Shape::circle(10, (0xF0u8, 0x20u8, 0x30u8));
-    let shape2 = Shape::circle(10, (0x10u8, 0xA0u8, 0xB0u8));
+    let circle = |num:int| {
+        Shape::circle(10, (((num << 4) | (num >> 4)) as u8,
+                           ((num << 2) | (num >> 2)) as u8,
+                           num as u8))
+    };
+
+    let shape  = circle(0x1234);
+    let shape2 = circle(0xF0DC);
 
     let mut shape = Bouncing::new(shape, (300, 0), (1, 2));
     let mut shape2 = Bouncing::new(shape2, (0, 20), (-4, 3));
@@ -172,7 +178,7 @@ pub fn main(invoker: &str, args: &[~str]) {
     let mut frames = 0;
     let then = sdl::get_ticks();
 
-    let mut shapes = [shape2, shape];
+    let mut shapes = ~[shape2, shape];
 
     loop {
         frames += 1;
@@ -198,6 +204,11 @@ pub fn main(invoker: &str, args: &[~str]) {
         match evt::poll_event() {
             evt::KeyEvent(evt::EscapeKey, _, _, _) | evt::QuitEvent => break,
             evt::NoEvent => {}
+            evt::MouseButtonEvent(_, true, x, y) => {
+                shapes.push(Bouncing::new(circle(frames),
+                                          (x as int, y as int),
+                                          (frames % 3, -(frames % 4))));
+            }
             _ => {}
         }
     }
