@@ -109,11 +109,30 @@ impl<T:BoundBox> BoundBox for Bouncing<T> {
     fn height(&self) -> int { self.obj.height() }
 }
 
-impl<T:BoundBox> Bouncing<T> {
-    fn new(obj: T, (x,y): (int,int), (dx,dy): (int, int)) -> Bouncing<T> {
-        Bouncing { obj: obj, x: x, y: y, dx: dx, dy: dy }
+trait Marking {
+    fn erase_on(&self, screen: &vid::Surface);
+    fn draw_on(&self, screen: &vid::Surface);
+}
+
+trait Turtle : Marking {
+    fn tick(&mut self);
+}
+
+impl<V:Visible+BoundBox> Marking for Bouncing<V> {
+    fn erase_on(&self, screen: &vid::Surface) {
+        screen.fill_rect(Some(sdl::Rect { x: self.x as i16,
+                                          y: self.y as i16,
+                                          w: self.width() as u16,
+                                          h: self.height() as u16, }),
+                         vid::RGB(0,0,0));
     }
 
+    fn draw_on(&self, screen: &vid::Surface) {
+        screen.blit_at(self.obj.surface(), self.x as i16, self.y as i16);
+    }
+}
+
+impl<T:Visible+BoundBox> Turtle for Bouncing<T> {
     fn tick(&mut self) {
         let x2 = self.x + self.dx;
         let y2 = self.y + self.dy;
@@ -121,6 +140,12 @@ impl<T:BoundBox> Bouncing<T> {
         let outside_y = y2 < 0 || y2 + self.height() > height;
         if outside_x { self.dx = -self.dx; } else { self.x  = x2; }
         if outside_y { self.dy = -self.dy; } else { self.y  = y2; }
+    }
+}
+
+impl<T:BoundBox> Bouncing<T> {
+    fn new(obj: T, (x,y): (int,int), (dx,dy): (int, int)) -> Bouncing<T> {
+        Bouncing { obj: obj, x: x, y: y, dx: dx, dy: dy }
     }
 
     #[cfg(not_used_yet)]
@@ -130,19 +155,21 @@ impl<T:BoundBox> Bouncing<T> {
 }
 
 impl<T:BoundBox> Bouncing<T> {
-    fn erase_on(&self, screen: &vid::Surface) {
-        screen.fill_rect(Some(sdl::Rect { x: self.x as i16,
-                                          y: self.y as i16,
-                                          w: self.width() as u16,
-                                          h: self.height() as u16, }),
-                         vid::RGB(0,0,0));
+}
+
+trait Visible {
+    fn surface<'a>(&'a self) -> &'a vid::Surface;
+
+    fn draw_at(&self, screen: &vid::Surface, x: i16, y: i16) {
+        screen.blit_at(self.surface(), x, y);
     }
 }
 
-impl Bouncing<Shape> {
-    fn draw_on(&self, screen: &vid::Surface) {
-        screen.blit_at(self.obj.surface, self.x as i16, self.y as i16);
-    }
+impl<V:Visible> Bouncing<V> {
+}
+
+impl Visible for Shape {
+    fn surface<'a>(&'a self) -> &'a vid::Surface { &*self.surface }
 }
 
 pub fn main(invoker: &str, args: &[~str]) {
@@ -179,7 +206,7 @@ pub fn main(invoker: &str, args: &[~str]) {
     let mut frames = 0;
     let then = sdl::get_ticks();
 
-    let mut shapes = ~[shape2, shape];
+    let mut shapes = ~[~shape2 as ~Turtle, ~shape as ~Turtle];
 
     loop {
         frames += 1;
@@ -206,9 +233,10 @@ pub fn main(invoker: &str, args: &[~str]) {
             evt::KeyEvent(evt::EscapeKey, _, _, _) | evt::QuitEvent => break,
             evt::NoEvent => {}
             evt::MouseMotionEvent(_, x, y, _x_rel, _y_rel) => {
-                shapes.push(Bouncing::new(circle(10, frames),
+                shapes.push(~Bouncing::new(circle(10, frames),
                                           (x as int, y as int),
-                                          (frames % 3, -(frames % 4))));
+                                          (frames % 3, -(frames % 4)))
+                            as ~Turtle);
             }
             evt::MouseButtonEvent(_, _, _x, _y) => {
                 let shape0 = shapes.shift().unwrap();
