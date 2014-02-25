@@ -204,10 +204,15 @@ pub fn main(invoker: &str, args: &[~str]) {
         match evt::poll_event() {
             evt::KeyEvent(evt::EscapeKey, _, _, _) | evt::QuitEvent => break,
             evt::NoEvent => {}
-            evt::MouseButtonEvent(_, true, x, y) => {
+            evt::MouseMotionEvent(_, x, y, _x_rel, _y_rel) => {
                 shapes.push(Bouncing::new(circle(frames),
                                           (x as int, y as int),
                                           (frames % 3, -(frames % 4))));
+            }
+            evt::MouseButtonEvent(_, _, _x, _y) => {
+                let shape0 = shapes.shift().unwrap();
+                let shape1 = shapes.shift().unwrap();
+                shapes = ~[shape0, shape1];
             }
             _ => {}
         }
