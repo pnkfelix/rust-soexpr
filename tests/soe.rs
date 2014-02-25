@@ -212,6 +212,9 @@ pub fn main(invoker: &str, args: &[~str]) {
             evt::MouseButtonEvent(_, _, _x, _y) => {
                 let shape0 = shapes.shift().unwrap();
                 let shape1 = shapes.shift().unwrap();
+                for s in shapes.iter() {
+                    s.erase_on(screen);
+                }
                 shapes = ~[shape0, shape1];
             }
             _ => {}
