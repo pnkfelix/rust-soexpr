@@ -1,3 +1,4 @@
+use std::from_str::FromStr;
 use std::rand::random;
 use std::vec::Items;
 use std::vec;
