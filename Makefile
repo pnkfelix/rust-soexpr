@@ -12,7 +12,8 @@ SDL_LIBDIR_OPT=$(SDL_1_2_INSTALL_OPT)/lib
 SDL_INCLUDEDIR_DBGNOPT=$(SDL_1_2_INSTALL_DBGNOPT)/include/SDL
 SDL_INCLUDEDIR_OPT=$(SDL_1_2_INSTALL_OPT)/include/SDL
 
-RUST_SDL_LIBDIR=$(HOME)/Dev/Rust/rust-sdl/objdir-opt
+# RUST_SDL_LIBDIR=$(HOME)/Dev/Rust/rust-sdl/objdir-opt
+RUST_SDL_LIBDIR=$(HOME)/opt/rustlibs
 
 SDL_MAIN_M=$(SDL_1_2_ROOT)/src/main/macosx/SDLMain.m
 
