@@ -15,9 +15,9 @@ use rend = sdl::render;
 use surf = sdl::surface;
 use rect = sdl::rect;
 use sdl::event::{QuitEvent, NoEvent};
-use KeyEvent = sdl::event::KeyUpEvent;
+use sdl::event::KeyUpEvent;
 use sdl::rect::{Rect};
-use Motion = sdl::event::MouseMotionEvent;
+use sdl::event::MouseMotionEvent;
 
 #[start]
 pub fn start(argc: int, argv: **u8) -> int {
@@ -46,7 +46,7 @@ fn dispatch(driver: &str, variant: &str, args: &[~str]) {
         "hello"
             => hello().unwrap(),
         _otherwise
-            => default(),
+            => default().unwrap(),
     }
 }
 
@@ -72,46 +72,53 @@ fn hello() -> Result<(), ~str> {
         ren.copy(tex, None, Some(dst))
     }
     ren.clear();
-    ren.copy(tex, None, None);
+    try!(ren.copy(tex, None, None))
     ren.present();
     sdl::timer::delay(2000);
     Ok(())
 }
 
-#[cfg(not(with_default))]
-fn default() { unimplemented!() }
-#[cfg(with_default)]
-fn default() {
-    sdl::init([sdl::InitVideo, sdl::InitTimer]);
+fn default() -> Result<(), ~str> {
+    try!(sdl::init([sdl::InitVideo, sdl::InitTimer]));
     let screen = vid::Window::new("rust-sdl demo - video",
         vid::PosUndefined, vid::PosUndefined, 800, 600, [])
-        .ok().expect("Failed to set_video_mode");
-
+        .ok().expect("Failed to create Window");
+    let screen = rend::Renderer::from_window(screen, rend::DriverAuto,
+                                             [rend::Software] // [rend::Accelerated]
+                                             )
+        .ok().expect("Failed to create Renderer from Window");
     let purple = pix::RGB(128, 0, 128);
     let black = pix::RGB(0, 0, 0);
-    let square = |x:u16, y:u16, width, color| {
+    let square = |x:int, y:int, width, color| {
         let w = width;
         let r = Rect { x: x as i32, y: y as i32, w: w, h: w };
-        screen.fill_rect(Some(r), color)
+        (screen.set_draw_color(color) &&
+         screen.fill_rect(&r))
             || fail!("error on fill_rect attempt");
     };
 
     'main : loop {
         'events : loop {
             match evt::poll_event() {
-                QuitEvent | KeyEvent(key::EscapeKey, _, _, _)
+                QuitEvent(_) | KeyUpEvent(_, _, key::EscapeKey, _, _)
                     => break 'main,
                 NoEvent
                     => break 'events,
-                Motion(ref state, x, y, _xrel, _yrel) if state.len() > 0
+                MouseMotionEvent(_timestamp, ref _window, _which,
+                                 ref state, x, y, _xrel, _yrel) if state.len() > 0
                     => square(x, y, 30, purple),
-                Motion(ref state, x, y, _xrel, _yrel) if state.len() == 0
+                MouseMotionEvent(_timestamp, ref _window, _which,
+                                 ref state, x, y, _xrel, _yrel) if state.len() == 0
                     => square(x, y, 3, black),
+                evt::FingerMotionEvent(..) |
+                evt::FingerDownEvent(..) |
+                evt::FingerUpEvent(..) => {}
                 e
                     => println!("e: {:?}", e),
             }
         }
-        screen.flip();
+        screen.present();
     }
     println!("Hello World");
+    Ok(())
 }

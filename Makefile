@@ -1,4 +1,4 @@
-default: hello # soe # do-demo
+default: hello soe # do-demo
 
 DEMO_SRC=demo.rs
 DEMO_DEPS=$(wildcard *.rs tests/*.rs)
