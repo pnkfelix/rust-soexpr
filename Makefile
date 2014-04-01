@@ -1,4 +1,4 @@
-default: hello soe # do-demo
+default: hello # soe # do-demo
 
 RUSTC=rustc
 DEMO_SRC=demo.rs
