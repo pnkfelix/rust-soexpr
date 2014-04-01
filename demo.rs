@@ -109,7 +109,8 @@ fn default() -> Result<(), ~str> {
                                              [rend::Accelerated]
                                              )
         .ok().expect("Failed to create Renderer from Window");
-    let _texture = screen.create_texture(pix::RGBA8888,
+    println!("render_target_supported: {}", screen.render_target_supported());
+    let texture = screen.create_texture(pix::RGBA8888,
                                         rend::AccessTarget,
                                         width,
                                         height)
@@ -117,10 +118,14 @@ fn default() -> Result<(), ~str> {
 
     let purple = pix::RGB(128, 0, 128);
     let black = pix::RGB(0, 0, 0);
+    if screen.render_target_supported() {
+        // screen.set_render_target(Some(&*texture));
+    }
+    screen.set_draw_color(black);
+    screen.fill_rect(&Rect { x: 0, y: 0, w: width as i32, h: height as i32 });
     let square = |x:int, y:int, width, color| {
         let w = width;
         let r = Rect { x: x as i32, y: y as i32, w: w, h: w };
-        screen.clear();
         (screen.set_draw_color(color) &&
          screen.fill_rect(&r))
             || fail!("error on fill_rect attempt");
