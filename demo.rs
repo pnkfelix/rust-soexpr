@@ -105,6 +105,40 @@ fn open_gl_init() -> Result<(~vid::Window,~vid::GLContext), ~str> {
     Ok((win, context))
 }
 
+struct VertexArrayObj { vao: GLuint }
+impl VertexArrayObj {
+    fn new() -> VertexArrayObj {
+        let mut vao : GLuint = 0;
+        unsafe {
+            gl::GenVertexArrays(1, &mut vao);
+            gl::BindVertexArray(vao);
+        }
+        VertexArrayObj { vao: vao }
+    }
+}
+
+struct VertexBufferObj { vbo: GLuint }
+impl VertexBufferObj {
+    fn new() -> VertexBufferObj {
+        let mut vbo : GLuint = 0;
+        unsafe {
+            gl::GenBuffers(1, &mut vbo); // Generate 1 buffer
+        }
+        VertexBufferObj { vbo: vbo }
+    }
+
+    fn bind_array(&self, vertices: &[f32]) {
+        unsafe {
+            gl::BindBuffer(gl::ARRAY_BUFFER, self.vbo);
+            let vertices_size = vertices.len() * mem::size_of::<f32>();
+            gl::BufferData(gl::ARRAY_BUFFER,
+                           vertices_size as GLsizeiptr,
+                           vertices.as_ptr() as *libc::c_void,
+                           gl::STATIC_DRAW);
+        }
+    }
+}
+
 fn open_gl_drawing() -> Result<(), ~str> {
     let (win, _context) = try!(open_gl_init());
 
@@ -117,23 +151,11 @@ fn open_gl_drawing() -> Result<(), ~str> {
                               -0.5, -0.5, 1.0, 1.0, 1.0, // bl Vertex 4 (X, Y, .. White)
                                ];
 
-    let mut vao : GLuint = 0;
-    unsafe {
-        gl::GenVertexArrays(1, &mut vao);
-        gl::BindVertexArray(vao);
-    }
+    let vao = VertexArrayObj::new();
 
+    let vbo = VertexBufferObj::new();
+    vbo.bind_array(vertices);
 
-    let mut vbo : GLuint = 0;
-    unsafe {
-        gl::GenBuffers(1, &mut vbo); // Generate 1 buffer
-        gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
-        let vertices_size = vertices.len() * mem::size_of::<f32>();
-        gl::BufferData(gl::ARRAY_BUFFER,
-                       vertices_size as GLsizeiptr,
-                       vertices.as_ptr() as *libc::c_void,
-                       gl::STATIC_DRAW);
-    }
     let vertexSource = ~r#"
 #version 150
 
@@ -318,16 +340,8 @@ void main()
 }
 "#);
 
-    let mut vao : GLuint = 0;
-    unsafe {
-        gl::GenVertexArrays(1, &mut vao);
-        gl::BindVertexArray(vao);
-    }
-
-    let mut vbo : GLuint = 0;
-    unsafe {
-        gl::GenBuffers(1, &mut vbo); // Generate 1 buffer
-    }
+    let vao = VertexArrayObj::new();
+    let vbo = VertexBufferObj::new();
 
     let vertices : &[f32] = &[
         // Position       Color     Texcoords
@@ -337,14 +351,7 @@ void main()
          -0.5, -0.5, 1.0, 1.0, 1.0, 0.0, 1.0, // Bot-left
     ];
 
-    unsafe {
-        gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
-        let vertices_size = vertices.len() * mem::size_of::<f32>();
-        gl::BufferData(gl::ARRAY_BUFFER,
-                       vertices_size as GLsizeiptr,
-                       vertices.as_ptr() as *libc::c_void,
-                       gl::STATIC_DRAW);
-    }
+    vbo.bind_array(vertices);
 
     let mut ebo : GLuint = 0;
     unsafe { gl::GenBuffers(1, &mut ebo); }
