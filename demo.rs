@@ -26,6 +26,8 @@ use sdl::event::KeyUpEvent;
 use sdl::rect::{Rect};
 use sdl::event::MouseMotionEvent;
 
+use gl::types::{GLchar, GLint, GLuint, GLsizei, GLsizeiptr};
+
 #[start]
 pub fn start(argc: int, argv: **u8) -> int {
     native::start(argc, argv, main)
@@ -97,20 +99,20 @@ fn open_gl() -> Result<(), ~str> {
                               -0.5, -0.5, 0.0, 0.0, 1.0, // Vertex 3 (X, Y, ..Blue)
                                ];
 
-    let mut vao : gl::types::GLuint = 0;
+    let mut vao : GLuint = 0;
     unsafe {
         gl::GenVertexArrays(1, &mut vao);
         gl::BindVertexArray(vao);
     }
 
 
-    let mut vbo : gl::types::GLuint = 0;
+    let mut vbo : GLuint = 0;
     unsafe {
         gl::GenBuffers(1, &mut vbo); // Generate 1 buffer
         gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
         let vertices_size = vertices.len() * mem::size_of::<f32>();
         gl::BufferData(gl::ARRAY_BUFFER,
-                       vertices_size as gl::types::GLsizeiptr,
+                       vertices_size as GLsizeiptr,
                        vertices.as_ptr() as *libc::c_void,
                        gl::STATIC_DRAW);
     }
@@ -146,12 +148,12 @@ void main()
         let vertexSource = vertexSource.to_c_str();
         vertexSource.with_ref(|p| {
             let tmp = ~[p];
-            gl::ShaderSource(vertexShader, 1, tmp.as_ptr() as **gl::types::GLchar, ptr::null());
+            gl::ShaderSource(vertexShader, 1, tmp.as_ptr() as **GLchar, ptr::null());
             gl::CompileShader(vertexShader);
         });
-        let mut status : gl::types::GLint = 0;
+        let mut status : GLint = 0;
         gl::GetShaderiv(vertexShader, gl::COMPILE_STATUS, &mut status);
-        if status != gl::TRUE as gl::types::GLint {
+        if status != gl::TRUE as GLint {
             let mut buffer = Vec::from_elem(512, 0 as libc::c_char);
             gl::GetShaderInfoLog(vertexShader, 512, ptr::mut_null(), buffer.as_mut_ptr());
             let buffer : Vec<char> = buffer.iter().map(|&c| c as u8 as char).collect();
@@ -165,12 +167,12 @@ void main()
         let fragmentSource = fragmentSource.to_c_str();
         fragmentSource.with_ref(|p| {
             let tmp = ~[p];
-            gl::ShaderSource(fragmentShader, 1, tmp.as_ptr() as **gl::types::GLchar, ptr::null());
+            gl::ShaderSource(fragmentShader, 1, tmp.as_ptr() as **GLchar, ptr::null());
             gl::CompileShader(fragmentShader);
         });
-        let mut status : gl::types::GLint = 0;
+        let mut status : GLint = 0;
         gl::GetShaderiv(fragmentShader, gl::COMPILE_STATUS, &mut status);
-        if status != gl::TRUE as gl::types::GLint {
+        if status != gl::TRUE as GLint {
             let mut buffer = Vec::from_elem(512, 0 as libc::c_char);
             gl::GetShaderInfoLog(fragmentShader, 512, ptr::mut_null(), buffer.as_mut_ptr());
             let buffer : Vec<char> = buffer.iter().map(|&c| c as u8 as char).collect();
@@ -191,19 +193,19 @@ void main()
 
     let name = "position".to_c_str();
     let posAttrib = name.with_ref(|n| unsafe { gl::GetAttribLocation(shaderProgram, n) });
-    gl::EnableVertexAttribArray(posAttrib as gl::types::GLuint);
+    gl::EnableVertexAttribArray(posAttrib as GLuint);
     unsafe {
         gl::VertexAttribPointer(
-            posAttrib as gl::types::GLuint, 2, gl::FLOAT, gl::FALSE,
-            5*mem::size_of::<f32>() as gl::types::GLsizei, ptr::null());
+            posAttrib as GLuint, 2, gl::FLOAT, gl::FALSE,
+            5*mem::size_of::<f32>() as GLsizei, ptr::null());
     }
     let name = "color".to_c_str();
     let colAttrib = name.with_ref(|n| unsafe { gl::GetAttribLocation(shaderProgram, n) });
-    gl::EnableVertexAttribArray(colAttrib as gl::types::GLuint);
+    gl::EnableVertexAttribArray(colAttrib as GLuint);
     unsafe {
-        gl::VertexAttribPointer(colAttrib as gl::types::GLuint,
+        gl::VertexAttribPointer(colAttrib as GLuint,
                                 3, gl::FLOAT, gl::FALSE,
-                                5*mem::size_of::<f32>() as gl::types::GLsizei,
+                                5*mem::size_of::<f32>() as GLsizei,
                                 cast::transmute::<uint, *libc::c_void>(2*mem::size_of::<f32>()));
     }
     let uniColor = {
