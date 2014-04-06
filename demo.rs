@@ -125,11 +125,13 @@ void main()
     let fragmentSource = ~r#"
 #version 150
 
+uniform vec3 triangleColor;
+
 out vec4 outColor;
 
 void main()
 {
-    outColor = vec4(1.0, 1.0, 1.0, 1.0);
+    outColor = vec4(triangleColor, 1.0);
 }
 "#;
 
@@ -187,6 +189,13 @@ void main()
         gl::VertexAttribPointer(posAttrib as gl::types::GLuint, 2, gl::FLOAT, gl::FALSE, 0, ptr::null());
         gl::EnableVertexAttribArray(posAttrib as gl::types::GLuint);
     }
+
+    let uniColor = {
+        let name = "triangleColor".to_c_str();
+        name.with_ref(|n| unsafe { gl::GetUniformLocation(shaderProgram, n) })
+    };
+
+    gl::Uniform3f(uniColor, 1.0, 0.0, 0.0);
 
     loop {
         let windowEvent = evt::poll_event();
