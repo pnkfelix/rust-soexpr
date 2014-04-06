@@ -58,7 +58,9 @@ fn dispatch(driver: &str, variant: &str, _args: &[~str]) -> Result<(), ~str> {
         "soe"
             => tests::soe::main(_invoker(), _args),
 */
-        "open_gl"  => open_gl(),
+        "open_gl" |
+        "open_gl_drawing"  => open_gl_drawing(),
+        "open_gl_textures" => open_gl_textures(),
         "hello"    => hello(),
         _otherwise => default(),
     }
@@ -73,8 +75,7 @@ mod tests {
 //   http://useful-linux-tips.blogspot.fr/2013/11/complete-minimal-sdl2-opengl-animation.html
 // but it uses glFrustum, which apparently has been deprecated 
 
-fn open_gl() -> Result<(), ~str> {
-    // http://www.open.gl/context
+fn open_gl_init() -> Result<(~vid::Window,~vid::GLContext), ~str> {
     static SCREEN_WIDTH:i32 = 800;
     static SCREEN_HEIGHT:i32 = 600;
 
@@ -92,7 +93,17 @@ fn open_gl() -> Result<(), ~str> {
     });
     // This line needs to come after we create the window
     gl::load_with(vid::gl_get_proc_address);
-    let _mainGLContext : ~vid::GLContext = try!(win.gl_create_context());
+
+    let context : ~vid::GLContext = try!(win.gl_create_context());
+
+    Ok((win, context))
+}
+
+fn open_gl_drawing() -> Result<(), ~str> {
+    let (win, _context) = try!(open_gl_init());
+
+    // http://www.open.gl/context
+    // and http://open.gl/drawing
 
     let vertices : &[f32] = &[-0.5,  0.5, 1.0, 0.0, 0.0, // tl Vertex 1 (X, Y, ..Red)
                                0.5,  0.5, 0.0, 1.0, 0.0, // tr Vertex 2 (X, Y, ..Green)
@@ -249,6 +260,12 @@ void main()
     }
 
     Ok(())
+}
+
+fn open_gl_textures() -> Result<(), ~str> {
+    let (win, _context) = try!(open_gl_init());
+
+    unimplemented!()
 }
 
 fn hello() -> Result<(), ~str> {
