@@ -118,6 +118,7 @@ pub mod high_level {
 
     use gl;
     use gl::types::{GLchar, GLint, GLuint, GLsizei, GLsizeiptr};
+    use gl::types::{GLenum, GLboolean, GLvoid, GLfloat};
 
     pub struct VertexArrayObj { vao: GLuint }
     impl VertexArrayObj {
@@ -243,14 +244,36 @@ pub mod high_level {
             gl::LinkProgram(self.shaderProgram);
             gl::UseProgram(self.shaderProgram);
         }
-        pub unsafe fn get_attrib_location(&self, name: &str) -> GLint {
+        pub unsafe fn get_attrib_location(&self, name: &str) -> AttribLocation {
             let name = name.to_c_str();
             let posAttrib = name.with_ref(|n| gl::GetAttribLocation(self.shaderProgram, n));
-            posAttrib
+            AttribLocation{ attrib: posAttrib }
         }
-        pub unsafe fn get_uniform_location(&self, name: &str) -> GLint {
+        pub unsafe fn get_uniform_location(&self, name: &str) -> UniformLocation {
             let name = name.to_c_str();
-            name.with_ref(|n| gl::GetUniformLocation(self.shaderProgram, n))
+            let attrib = name.with_ref(|n| gl::GetUniformLocation(self.shaderProgram, n));
+            UniformLocation { attrib: attrib }
+        }
+    }
+
+    pub struct AttribLocation { attrib: GLint }
+    impl AttribLocation {
+        pub fn enable_vertex_attrib_array(&self) {
+            gl::EnableVertexAttribArray(self.attrib as GLuint);
+        }
+        pub unsafe fn vertex_attrib_pointer(&self, size: GLint, type_: GLenum, normalized: GLboolean, stride: GLsizei, pointer: *GLvoid) {
+            gl::VertexAttribPointer(
+                self.attrib as GLuint, size, type_, normalized,
+                stride, pointer);
+        }
+    }
+    pub struct UniformLocation { attrib: GLint }
+    impl UniformLocation {
+        pub fn uniform1i(&self, v0: GLint) {
+            gl::Uniform1i(self.attrib, v0);
+        }
+        pub fn uniform3f(&self, v0: GLfloat, v1: GLfloat, v2: GLfloat) {
+            gl::Uniform3f(self.attrib, v0, v1, v2);
         }
     }
 }
@@ -311,21 +334,22 @@ void main()
     shaderProgram.link_and_use();
 
     let posAttrib = unsafe { shaderProgram.get_attrib_location("position") };
-    gl::EnableVertexAttribArray(posAttrib as GLuint);
+    posAttrib.enable_vertex_attrib_array();
     unsafe {
-        gl::VertexAttribPointer(
-            posAttrib as GLuint, 2, gl::FLOAT, gl::FALSE,
-            5*mem::size_of::<f32>() as GLsizei, ptr::null());
+        posAttrib.vertex_attrib_pointer(
+            2, gl::FLOAT, gl::FALSE, 
+            5*mem::size_of::<f32>() as GLsizei,
+            ptr::null());
+    }
+    let colAttrib = unsafe { shaderProgram.get_attrib_location("color") };
+    colAttrib.enable_vertex_attrib_array();
+    unsafe {
+        colAttrib.vertex_attrib_pointer(
+            3, gl::FLOAT, gl::FALSE,
+            5*mem::size_of::<f32>() as GLsizei,
+            cast::transmute::<uint, *libc::c_void>(2*mem::size_of::<f32>()));
     }
 
-    let colAttrib = unsafe { shaderProgram.get_attrib_location("color") };
-    gl::EnableVertexAttribArray(colAttrib as GLuint);
-    unsafe {
-        gl::VertexAttribPointer(colAttrib as GLuint,
-                                3, gl::FLOAT, gl::FALSE,
-                                5*mem::size_of::<f32>() as GLsizei,
-                                cast::transmute::<uint, *libc::c_void>(2*mem::size_of::<f32>()));
-    }
     let uniColor = unsafe { shaderProgram.get_uniform_location("triangleColor") };
 
     let elements : ~[GLuint] = ~[0, 1, 2, 2, 3, 0];
@@ -341,7 +365,7 @@ void main()
         }
 
         let time_ = time::precise_time_s() as f32;
-        gl::Uniform3f(uniColor, ((time_*4.0).sin() + 1.0)/2.0, 0.0, 0.0);
+        uniColor.uniform3f(((time_*4.0).sin() + 1.0)/2.0, 0.0, 0.0);
 
         // Clear the screen to black
         gl::ClearColor(0.0f32, 0.0f32, 0.0f32, 1.0f32);
@@ -442,30 +466,30 @@ void main()
 
     // Specify the layout of the vertex data
     let posAttrib = unsafe { shaderProgram.get_attrib_location("position") };
-    gl::EnableVertexAttribArray(posAttrib as GLuint);
+    posAttrib.enable_vertex_attrib_array();
     unsafe {
-        gl::VertexAttribPointer(posAttrib as GLuint,
-                                2, gl::FLOAT, gl::FALSE,
-                                7*mem::size_of::<f32>() as GLsizei,
-                                ptr::null());
+        posAttrib.vertex_attrib_pointer(
+            2, gl::FLOAT, gl::FALSE,
+            7*mem::size_of::<f32>() as GLsizei,
+            ptr::null());
     }
 
     let colAttrib = unsafe { shaderProgram.get_attrib_location("color") };
-    gl::EnableVertexAttribArray(colAttrib as GLuint);
+    colAttrib.enable_vertex_attrib_array();
     unsafe {
-        gl::VertexAttribPointer(colAttrib as GLuint,
-                                3, gl::FLOAT, gl::FALSE,
-                                7*mem::size_of::<f32>() as GLsizei,
-                                cast::transmute::<uint, *libc::c_void>(2*mem::size_of::<f32>()));
+        colAttrib.vertex_attrib_pointer(
+            3, gl::FLOAT, gl::FALSE,
+            7*mem::size_of::<f32>() as GLsizei,
+            cast::transmute::<uint, *libc::c_void>(2*mem::size_of::<f32>()));
     }
 
     let texAttrib = unsafe { shaderProgram.get_attrib_location("texcoord") };
-    gl::EnableVertexAttribArray(texAttrib as GLuint);
+    texAttrib.enable_vertex_attrib_array();
     unsafe {
-        gl::VertexAttribPointer(texAttrib as GLuint,
-                                2, gl::FLOAT, gl::FALSE,
-                                7*mem::size_of::<f32>() as GLsizei,
-                                cast::transmute::<uint, *libc::c_void>(5*mem::size_of::<f32>()));
+        texAttrib.vertex_attrib_pointer(
+            2, gl::FLOAT, gl::FALSE,
+            7*mem::size_of::<f32>() as GLsizei,
+            cast::transmute::<uint, *libc::c_void>(5*mem::size_of::<f32>()));
     }
 
     // Load textures
@@ -486,7 +510,8 @@ void main()
         });
     }
 
-    gl::Uniform1i(unsafe { shaderProgram.get_uniform_location("texKitten") }, 0);
+    let uniCol = unsafe { shaderProgram.get_uniform_location("texKitten") };
+    uniCol.uniform1i(0);
 
     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
@@ -507,7 +532,8 @@ void main()
         });
     }
 
-    gl::Uniform1i(unsafe { shaderProgram.get_uniform_location("texPuppy") }, 1);
+    let uniCol = unsafe { shaderProgram.get_uniform_location("texPuppy") };
+    uniCol.uniform1i(1);
 
     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
