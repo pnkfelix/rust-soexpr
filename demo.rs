@@ -7,6 +7,7 @@ extern crate time;
 extern crate sdl = "sdl2";
 extern crate gl;
 
+use std::cast;
 use std::libc;
 use std::mem;
 use std::os;
@@ -91,9 +92,9 @@ fn open_gl() -> Result<(), ~str> {
     gl::load_with(vid::gl_get_proc_address);
     let _mainGLContext : ~vid::GLContext = try!(win.gl_create_context());
 
-    let vertices : &[f32] = &[ 0.0,  0.5, // Vertex 1 (X, Y)
-                               0.5, -0.5, // Vertex 2 (X, Y)
-                              -0.5, -0.5, // Vertex 3 (X, Y)
+    let vertices : &[f32] = &[ 0.0,  0.5, 1.0, 0.0, 0.0, // Vertex 1 (X, Y, ..Red)
+                               0.5, -0.5, 0.0, 1.0, 0.0, // Vertex 2 (X, Y, ..Green)
+                              -0.5, -0.5, 0.0, 0.0, 1.0, // Vertex 3 (X, Y, ..Blue)
                                ];
 
     let mut vao : gl::types::GLuint = 0;
@@ -117,22 +118,26 @@ fn open_gl() -> Result<(), ~str> {
 #version 150
 
 in vec2 position;
+in vec3 color;
+
+out vec3 Color;
 
 void main()
 {
+    Color = color;
     gl_Position = vec4(position, 0.0, 1.0);
 }
 "#;
     let fragmentSource = ~r#"
 #version 150
 
-uniform vec3 triangleColor;
+in vec3 Color;
 
 out vec4 outColor;
 
 void main()
 {
-    outColor = vec4(triangleColor, 1.0);
+    outColor = vec4(Color, 1.0);
 }
 "#;
 
@@ -186,11 +191,21 @@ void main()
 
     let name = "position".to_c_str();
     let posAttrib = name.with_ref(|n| unsafe { gl::GetAttribLocation(shaderProgram, n) });
+    gl::EnableVertexAttribArray(posAttrib as gl::types::GLuint);
     unsafe {
-        gl::VertexAttribPointer(posAttrib as gl::types::GLuint, 2, gl::FLOAT, gl::FALSE, 0, ptr::null());
-        gl::EnableVertexAttribArray(posAttrib as gl::types::GLuint);
+        gl::VertexAttribPointer(
+            posAttrib as gl::types::GLuint, 2, gl::FLOAT, gl::FALSE,
+            5*mem::size_of::<f32>() as gl::types::GLsizei, ptr::null());
     }
-
+    let name = "color".to_c_str();
+    let colAttrib = name.with_ref(|n| unsafe { gl::GetAttribLocation(shaderProgram, n) });
+    gl::EnableVertexAttribArray(colAttrib as gl::types::GLuint);
+    unsafe {
+        gl::VertexAttribPointer(colAttrib as gl::types::GLuint,
+                                3, gl::FLOAT, gl::FALSE,
+                                5*mem::size_of::<f32>() as gl::types::GLsizei,
+                                cast::transmute::<uint, *libc::c_void>(2*mem::size_of::<f32>()));
+    }
     let uniColor = {
         let name = "triangleColor".to_c_str();
         name.with_ref(|n| unsafe { gl::GetUniformLocation(shaderProgram, n) })
