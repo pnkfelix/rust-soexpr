@@ -256,15 +256,48 @@ pub mod high_level {
         }
     }
 
+    pub struct VertexAttribPointerArgs {
+        pub size: GLint,
+        pub type_: GLenum,
+        pub normalized: GLboolean,
+        pub stride: GLsizei,
+        pub pointer: *GLvoid,
+    }
+
+    pub trait ToVertexAttribPointerArgs {
+        fn recompose(self) -> VertexAttribPointerArgs;
+    }
+    impl ToVertexAttribPointerArgs for VertexAttribPointerArgs {
+        fn recompose(self) -> VertexAttribPointerArgs { self }
+    }
+    impl ToVertexAttribPointerArgs for (GLint, GLenum, GLboolean, GLsizei, *GLvoid) {
+        fn recompose(self) -> VertexAttribPointerArgs {
+            let (size, type_, normalized, stride, pointer) = self;
+            VertexAttribPointerArgs {
+                size: size, type_: type_, normalized: normalized, stride: stride, pointer: pointer
+            }
+        }
+    }
+    impl ToVertexAttribPointerArgs for (GLint, GLenum, GLboolean, GLsizei) {
+        fn recompose(self) -> VertexAttribPointerArgs {
+            let (size, type_, normalized, stride) = self;
+            VertexAttribPointerArgs {
+                size: size, type_: type_, normalized: normalized, stride: stride,
+                pointer: ptr::null()
+            }
+        }
+    }
+
     pub struct AttribLocation { attrib: GLint }
     impl AttribLocation {
         pub fn enable_vertex_attrib_array(&self) {
             gl::EnableVertexAttribArray(self.attrib as GLuint);
         }
-        pub unsafe fn vertex_attrib_pointer(&self, size: GLint, type_: GLenum, normalized: GLboolean, stride: GLsizei, pointer: *GLvoid) {
+        pub unsafe fn vertex_attrib_pointer<A:ToVertexAttribPointerArgs>(&self, args: A) {
+            let args = args.recompose();
             gl::VertexAttribPointer(
-                self.attrib as GLuint, size, type_, normalized,
-                stride, pointer);
+                self.attrib as GLuint, args.size, args.type_, args.normalized,
+                args.stride, args.pointer);
         }
     }
     pub struct UniformLocation { attrib: GLint }
@@ -336,18 +369,16 @@ void main()
     let posAttrib = unsafe { shaderProgram.get_attrib_location("position") };
     posAttrib.enable_vertex_attrib_array();
     unsafe {
-        posAttrib.vertex_attrib_pointer(
-            2, gl::FLOAT, gl::FALSE, 
-            5*mem::size_of::<f32>() as GLsizei,
-            ptr::null());
+        posAttrib.vertex_attrib_pointer((2i32, gl::FLOAT, gl::FALSE, 
+                                         5*mem::size_of::<f32>() as GLsizei))
     }
     let colAttrib = unsafe { shaderProgram.get_attrib_location("color") };
     colAttrib.enable_vertex_attrib_array();
     unsafe {
         colAttrib.vertex_attrib_pointer(
-            3, gl::FLOAT, gl::FALSE,
-            5*mem::size_of::<f32>() as GLsizei,
-            cast::transmute::<uint, *libc::c_void>(2*mem::size_of::<f32>()));
+            (3i32, gl::FLOAT, gl::FALSE,
+             5*mem::size_of::<f32>() as GLsizei,
+             cast::transmute::<uint, *gl::types::GLvoid>(2*mem::size_of::<f32>())));
     }
 
     let uniColor = unsafe { shaderProgram.get_uniform_location("triangleColor") };
@@ -386,6 +417,8 @@ enum GlTexturesVariant {
 }
 
 fn open_gl_textures(variant: GlTexturesVariant) -> Result<(), ~str> {
+    use Vapa = high_level::VertexAttribPointerArgs;
+
     let (win, _context) = try!(open_gl_init());
 
     let vertexSource = ~r#"
@@ -469,27 +502,26 @@ void main()
     posAttrib.enable_vertex_attrib_array();
     unsafe {
         posAttrib.vertex_attrib_pointer(
-            2, gl::FLOAT, gl::FALSE,
-            7*mem::size_of::<f32>() as GLsizei,
-            ptr::null());
+            (2i32, gl::FLOAT, gl::FALSE,
+             7*mem::size_of::<f32>() as GLsizei))
     }
 
     let colAttrib = unsafe { shaderProgram.get_attrib_location("color") };
     colAttrib.enable_vertex_attrib_array();
     unsafe {
         colAttrib.vertex_attrib_pointer(
-            3, gl::FLOAT, gl::FALSE,
-            7*mem::size_of::<f32>() as GLsizei,
-            cast::transmute::<uint, *libc::c_void>(2*mem::size_of::<f32>()));
+            (Vapa { size: 3i32, type_: gl::FLOAT, normalized: gl::FALSE,
+                    stride: 7*mem::size_of::<f32>() as GLsizei,
+                    pointer: cast::transmute::<uint, *libc::c_void>(2*mem::size_of::<f32>()) }));
     }
 
     let texAttrib = unsafe { shaderProgram.get_attrib_location("texcoord") };
     texAttrib.enable_vertex_attrib_array();
     unsafe {
         texAttrib.vertex_attrib_pointer(
-            2, gl::FLOAT, gl::FALSE,
-            7*mem::size_of::<f32>() as GLsizei,
-            cast::transmute::<uint, *libc::c_void>(5*mem::size_of::<f32>()));
+            (2i32, gl::FLOAT, gl::FALSE,
+             7*mem::size_of::<f32>() as GLsizei,
+             cast::transmute::<uint, *libc::c_void>(5*mem::size_of::<f32>())));
     }
 
     // Load textures
