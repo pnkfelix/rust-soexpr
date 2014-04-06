@@ -20,7 +20,7 @@ open_gl: $(DEMO)-dbg
 	RUST_BACKTRACE=1 ./$< $@
 
 open_gl_textures: $(DEMO)-dbg
-	RUST_BACKTRACE=1 ./$< $@
+	RUST_BACKTRACE=1 ./$< $@ mix
 
 hello: $(DEMO)-dbg
 	RUST_BACKTRACE=1 ./$< $@

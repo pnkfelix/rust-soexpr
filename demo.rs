@@ -49,20 +49,26 @@ fn main() {
     }
 }
 
-fn dispatch(driver: &str, variant: &str, _args: &[~str]) -> Result<(), ~str> {
+fn dispatch(driver: &str, variant: &str, args: &[~str]) -> Result<(), ~str> {
     let _invoker = ||format!("{} {}", driver, variant);
-    match variant {
+    match (variant, args.get(0)) {
 /*
         "testsprite"
             => tests::testsprite::main(_invoker(), _args),
         "soe"
             => tests::soe::main(_invoker(), _args),
 */
-        "open_gl" |
-        "open_gl_drawing"  => open_gl_drawing(),
-        "open_gl_textures" => open_gl_textures(),
-        "hello"    => hello(),
-        _otherwise => default(),
+        ("open_gl", _) |
+        ("open_gl_drawing", _)
+            => open_gl_drawing(),
+        ("open_gl_textures", Some(arg)) if arg.as_slice() == "colored"
+            => open_gl_textures(ColoredKitten),
+        ("open_gl_textures", Some(arg)) if arg.as_slice() == "mix"
+            => open_gl_textures(KittenPuppy),
+        ("open_gl_textures", _)
+            => open_gl_textures(ColoredKitten),
+        ("hello", _)                    => hello(),
+        _otherwise                      => default(),
     }
 }
 
@@ -262,7 +268,12 @@ void main()
     Ok(())
 }
 
-fn open_gl_textures() -> Result<(), ~str> {
+enum GlTexturesVariant {
+    ColoredKitten,
+    KittenPuppy,
+}
+
+fn open_gl_textures(variant: GlTexturesVariant) -> Result<(), ~str> {
     let (win, _context) = try!(open_gl_init());
 
     let vertexSource = ~r#"
@@ -281,7 +292,9 @@ void main() {
     gl_Position = vec4(position, 0.0, 1.0);
 }
 "#;
-    let fragmentSource = ~r#"
+    let fragmentSource = format!(
+        "{}{}{}",
+        r#"
 #version 150 core
 
 in vec3 Color;
@@ -289,13 +302,21 @@ in vec2 Texcoord;
 
 out vec4 outColor;
 
-uniform sampler2D tex;
+uniform sampler2D texKitten;
+uniform sampler2D texPuppy;
 
 void main()
 {
-    outColor = texture(tex, Texcoord) * vec4(Color, 1.0);
+    vec4 colKitten = texture(texKitten, Texcoord);
+    vec4 colPuppy = texture(texPuppy, Texcoord);
+    "#,
+        match variant {
+            ColoredKitten => "outColor = colKitten * vec4(Color, 1.0);",
+            KittenPuppy   => "outColor = mix(colKitten, colPuppy, 0.5);"
+        },
+        r#"
 }
-"#;
+"#);
 
     let mut vao : GLuint = 0;
     unsafe {
@@ -420,10 +441,12 @@ void main()
                                 cast::transmute::<uint, *libc::c_void>(5*mem::size_of::<f32>()));
     }
 
-    // Load texture
-    let mut tex : GLuint = 0;
-    unsafe { gl::GenTextures(1, &mut tex); }
+    // Load textures
+    let mut textures : ~[GLuint] = ~[ 0, 0 ];
+    unsafe { gl::GenTextures(2, textures.as_mut_ptr()); }
 
+    gl::ActiveTexture(gl::TEXTURE0);
+    gl::BindTexture(gl::TEXTURE_2D, textures[0]);
     {
         let file = Path::new("sample.bmp");
         let image = try!(surf::Surface::from_bmp(&file));
@@ -435,41 +458,34 @@ void main()
             }
         });
     }
+    let name = "texKitten".to_c_str();
+    name.with_ref(|n| gl::Uniform1i(unsafe { gl::GetUniformLocation(shaderProgram, n) }, 0));
 
     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as GLint);
     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as GLint);
 
-
-    if false {
-        gl::BindTexture(gl::TEXTURE_2D, tex);
-
-        // let color : ~[f32] = ~[1.0, 0.0, 0.0, 1.0];
-        // unsafe { gl::TexParameterfv(gl::TEXTURE_2D, gl::TEXTURE_BORDER_COLOR, color.as_ptr()); }
-
-
-        gl::GenerateMipmap(gl::TEXTURE_2D);
-
-        // Black/white checkerboard
-        let pixels = ~[0.0, 0.0, 0.0,   1.0, 1.0, 1.0,
-                       1.0, 1.0, 1.0,   0.0, 0.0, 0.0];
-        unsafe {
-            gl::TexImage2D(gl::TEXTURE_2D, 0, gl::RGB as GLint,
-                           2, 2, 0, gl::BGR, gl::UNSIGNED_BYTE, pixels.as_ptr() as *libc::c_void);
-        }
-
-        let _uniColor = {
-            let name = "triangleColor".to_c_str();
-            name.with_ref(|n| unsafe { gl::GetUniformLocation(shaderProgram, n) })
-        };
-
-        unsafe {
-            gl::VertexAttribPointer(posAttrib as GLuint, 2, gl::FLOAT, gl::FALSE, 7*mem::size_of::<f32>() as GLsizei, ptr::null());
-            gl::VertexAttribPointer(colAttrib as GLuint, 3, gl::FLOAT, gl::FALSE, 7*mem::size_of::<f32>() as GLsizei,
-                                    cast::transmute::<uint, *libc::c_void>(5*mem::size_of::<f32>()));
-        }
+    gl::ActiveTexture(gl::TEXTURE1);
+    gl::BindTexture(gl::TEXTURE_2D, textures[1]);
+    {
+        let file = Path::new("sample2.bmp");
+        let image = try!(surf::Surface::from_bmp(&file));
+        image.with_lock(|pixels| {
+            unsafe {
+                gl::TexImage2D(gl::TEXTURE_2D, 0, gl::RGB as GLint,
+                               image.get_width() as GLsizei, image.get_height() as GLsizei,
+                               0, gl::RGBA, gl::UNSIGNED_BYTE, pixels.as_ptr() as *libc::c_void);
+            }
+        });
     }
+    let name = "texPuppy".to_c_str();
+    name.with_ref(|n|gl::Uniform1i(unsafe { gl::GetUniformLocation(shaderProgram, n) }, 1));
+
+    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
+    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
+    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as GLint);
+    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as GLint);
 
     loop {
         let windowEvent = evt::poll_event();
