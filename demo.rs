@@ -213,6 +213,35 @@ impl FragmentShader {
     }
 }
 
+struct ShaderProgram { shaderProgram: GLuint }
+impl ShaderProgram {
+    fn new() -> ShaderProgram {
+        let shaderProgram = gl::CreateProgram();
+        ShaderProgram { shaderProgram: shaderProgram }
+    }
+    fn attach_shaders(&self, vs: &VertexShader, fs: &FragmentShader) {
+        gl::AttachShader(self.shaderProgram, vs.gluint());
+        gl::AttachShader(self.shaderProgram, fs.gluint());
+    }
+    unsafe fn bind_frag_data_location(&self, color: u32, name: &str) {
+        let name = name.to_c_str();
+        name.with_ref(|n| gl::BindFragDataLocation(self.shaderProgram, color, n));
+    }
+    fn link_and_use(&self) {
+        gl::LinkProgram(self.shaderProgram);
+        gl::UseProgram(self.shaderProgram);
+    }
+    unsafe fn get_attrib_location(&self, name: &str) -> GLint {
+        let name = name.to_c_str();
+        let posAttrib = name.with_ref(|n| gl::GetAttribLocation(self.shaderProgram, n));
+        posAttrib
+    }
+    fn get_uniform_location(&self, name: &str) -> GLint {
+        let name = name.to_c_str();
+        name.with_ref(|n| unsafe { gl::GetUniformLocation(self.shaderProgram, n) })
+    }
+}
+
 fn open_gl_drawing() -> Result<(), ~str> {
     let (win, _context) = try!(open_gl_init());
 
@@ -263,26 +292,20 @@ void main()
     let fragmentShader = FragmentShader::new();
     fragmentShader.source(fragmentSource);
 
-    let shaderProgram = gl::CreateProgram();
-    unsafe {
-        gl::AttachShader(shaderProgram, vertexShader.gluint());
-        gl::AttachShader(shaderProgram, fragmentShader.gluint());
-        let name = "outColor".to_c_str();
-        name.with_ref(|n| gl::BindFragDataLocation(shaderProgram, 0, n));
-        gl::LinkProgram(shaderProgram);
-        gl::UseProgram(shaderProgram);
-    }
+    let shaderProgram = ShaderProgram::new();
+    shaderProgram.attach_shaders(&vertexShader, &fragmentShader);
+    unsafe { shaderProgram.bind_frag_data_location(0, "outColor"); }
+    shaderProgram.link_and_use();
 
-    let name = "position".to_c_str();
-    let posAttrib = name.with_ref(|n| unsafe { gl::GetAttribLocation(shaderProgram, n) });
+    let posAttrib = unsafe { shaderProgram.get_attrib_location("position") };
     gl::EnableVertexAttribArray(posAttrib as GLuint);
     unsafe {
         gl::VertexAttribPointer(
             posAttrib as GLuint, 2, gl::FLOAT, gl::FALSE,
             5*mem::size_of::<f32>() as GLsizei, ptr::null());
     }
-    let name = "color".to_c_str();
-    let colAttrib = name.with_ref(|n| unsafe { gl::GetAttribLocation(shaderProgram, n) });
+
+    let colAttrib = unsafe { shaderProgram.get_attrib_location("color") };
     gl::EnableVertexAttribArray(colAttrib as GLuint);
     unsafe {
         gl::VertexAttribPointer(colAttrib as GLuint,
@@ -290,11 +313,7 @@ void main()
                                 5*mem::size_of::<f32>() as GLsizei,
                                 cast::transmute::<uint, *libc::c_void>(2*mem::size_of::<f32>()));
     }
-    let uniColor = {
-        let name = "triangleColor".to_c_str();
-        name.with_ref(|n| unsafe { gl::GetUniformLocation(shaderProgram, n) })
-    };
-
+    let uniColor = shaderProgram.get_uniform_location("triangleColor");
 
     let elements : ~[GLuint] = ~[0, 1, 2, 2, 3, 0];
     let ebo = ElementsBufferObj::new();
