@@ -1,4 +1,4 @@
-default: open_gl # hello: $(DEMO)-dbg
+default: open_gl_textures # hello: $(DEMO)-dbg
 
 RUSTC=rustc
 DEMO_SRC=demo.rs
@@ -17,6 +17,9 @@ soe: $(DEMO)-dbg
 	./$< $@
 
 open_gl: $(DEMO)-dbg
+	RUST_BACKTRACE=1 ./$< $@
+
+open_gl_textures: $(DEMO)-dbg
 	RUST_BACKTRACE=1 ./$< $@
 
 hello: $(DEMO)-dbg

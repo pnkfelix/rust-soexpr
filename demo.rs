@@ -265,7 +265,231 @@ void main()
 fn open_gl_textures() -> Result<(), ~str> {
     let (win, _context) = try!(open_gl_init());
 
-    unimplemented!()
+    let vertexSource = ~r#"
+#version 150 core
+
+in vec2 position;
+in vec3 color;
+in vec2 texcoord;
+
+out vec3 Color;
+out vec2 Texcoord;
+
+void main() {
+    Color = color;
+    Texcoord = texcoord;
+    gl_Position = vec4(position, 0.0, 1.0);
+}
+"#;
+    let fragmentSource = ~r#"
+#version 150 core
+
+in vec3 Color;
+in vec2 Texcoord;
+
+out vec4 outColor;
+
+uniform sampler2D tex;
+
+void main()
+{
+    outColor = texture(tex, Texcoord) * vec4(Color, 1.0);
+}
+"#;
+
+    let mut vao : GLuint = 0;
+    unsafe {
+        gl::GenVertexArrays(1, &mut vao);
+        gl::BindVertexArray(vao);
+    }
+
+    let mut vbo : GLuint = 0;
+    unsafe {
+        gl::GenBuffers(1, &mut vbo); // Generate 1 buffer
+    }
+
+    let vertices : &[f32] = &[
+        // Position       Color     Texcoords
+         -0.5,  0.5, 1.0, 0.0, 0.0, 0.0, 0.0, // Top-left
+          0.5,  0.5, 0.0, 1.0, 0.0, 1.0, 0.0, // Top-right
+          0.5, -0.5, 0.0, 0.0, 1.0, 1.0, 1.0, // Bot-right
+         -0.5, -0.5, 1.0, 1.0, 1.0, 0.0, 1.0, // Bot-left
+    ];
+
+    unsafe {
+        gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
+        let vertices_size = vertices.len() * mem::size_of::<f32>();
+        gl::BufferData(gl::ARRAY_BUFFER,
+                       vertices_size as GLsizeiptr,
+                       vertices.as_ptr() as *libc::c_void,
+                       gl::STATIC_DRAW);
+    }
+
+    let mut ebo : GLuint = 0;
+    unsafe { gl::GenBuffers(1, &mut ebo); }
+
+    let elements : ~[GLuint] = ~[0, 1, 2,
+                                 2, 3, 0];
+
+    gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, ebo);
+    unsafe {
+        gl::BufferData(gl::ELEMENT_ARRAY_BUFFER,
+                       (mem::size_of::<GLuint>() * elements.len()) as i64,
+                       elements.as_ptr() as *libc::c_void,
+                       gl::STATIC_DRAW);
+    }
+
+    // Create and compile the vertex shader
+    let vertexShader = gl::CreateShader(gl::VERTEX_SHADER);
+    unsafe {
+        let vertexSource = vertexSource.to_c_str();
+        vertexSource.with_ref(|p| {
+            let tmp = ~[p];
+            gl::ShaderSource(vertexShader, 1, tmp.as_ptr() as **GLchar, ptr::null());
+            gl::CompileShader(vertexShader);
+        });
+        let mut status : GLint = 0;
+        gl::GetShaderiv(vertexShader, gl::COMPILE_STATUS, &mut status);
+        if status != gl::TRUE as GLint {
+            let mut buffer = Vec::from_elem(512, 0 as libc::c_char);
+            gl::GetShaderInfoLog(vertexShader, 512, ptr::mut_null(), buffer.as_mut_ptr());
+            let buffer : Vec<char> = buffer.iter().map(|&c| c as u8 as char).collect();
+            let end = buffer.iter().position(|&c|c == '\0').unwrap();
+            fail!("vertexShader compilation failure {}", str::from_chars(buffer.slice_to(end)));
+        }
+    }
+
+    // Create and compile the fragment shader
+    let fragmentShader = gl::CreateShader(gl::FRAGMENT_SHADER);
+    unsafe {
+        let fragmentSource = fragmentSource.to_c_str();
+        fragmentSource.with_ref(|p| {
+            let tmp = ~[p];
+            gl::ShaderSource(fragmentShader, 1, tmp.as_ptr() as **GLchar, ptr::null());
+            gl::CompileShader(fragmentShader);
+        });
+        let mut status : GLint = 0;
+        gl::GetShaderiv(fragmentShader, gl::COMPILE_STATUS, &mut status);
+        if status != gl::TRUE as GLint {
+            let mut buffer = Vec::from_elem(512, 0 as libc::c_char);
+            gl::GetShaderInfoLog(fragmentShader, 512, ptr::mut_null(), buffer.as_mut_ptr());
+            let buffer : Vec<char> = buffer.iter().map(|&c| c as u8 as char).collect();
+            let end = buffer.iter().position(|&c|c == '\0').unwrap();
+            fail!("fragmentShader compilation failure {}", str::from_chars(buffer.slice_to(end)));
+        }
+    }
+    // Link the vertex and fragment shader into a shader program
+    let shaderProgram = gl::CreateProgram();
+    unsafe {
+        gl::AttachShader(shaderProgram, vertexShader);
+        gl::AttachShader(shaderProgram, fragmentShader);
+        let name = "outColor".to_c_str();
+        name.with_ref(|n| gl::BindFragDataLocation(shaderProgram, 0, n));
+        gl::LinkProgram(shaderProgram);
+        gl::UseProgram(shaderProgram);
+    }
+
+    // Specify the layout of the vertex data
+    let name = "position".to_c_str();
+    let posAttrib = name.with_ref(|n| unsafe { gl::GetAttribLocation(shaderProgram, n) });
+    gl::EnableVertexAttribArray(posAttrib as GLuint);
+    unsafe {
+        gl::VertexAttribPointer(posAttrib as GLuint,
+                                2, gl::FLOAT, gl::FALSE,
+                                7*mem::size_of::<f32>() as GLsizei,
+                                ptr::null());
+    }
+
+    let name = "color".to_c_str();
+    let colAttrib = name.with_ref(|n| unsafe { gl::GetAttribLocation(shaderProgram, n) });
+    gl::EnableVertexAttribArray(colAttrib as GLuint);
+    unsafe {
+        gl::VertexAttribPointer(colAttrib as GLuint,
+                                3, gl::FLOAT, gl::FALSE,
+                                7*mem::size_of::<f32>() as GLsizei,
+                                cast::transmute::<uint, *libc::c_void>(2*mem::size_of::<f32>()));
+    }
+
+    let name = "texcoord".to_c_str();
+    let texAttrib = name.with_ref(|n| unsafe { gl::GetAttribLocation(shaderProgram, n) });
+    gl::EnableVertexAttribArray(texAttrib as GLuint);
+    unsafe {
+        gl::VertexAttribPointer(texAttrib as GLuint,
+                                2, gl::FLOAT, gl::FALSE,
+                                7*mem::size_of::<f32>() as GLsizei,
+                                cast::transmute::<uint, *libc::c_void>(5*mem::size_of::<f32>()));
+    }
+
+    // Load texture
+    let mut tex : GLuint = 0;
+    unsafe { gl::GenTextures(1, &mut tex); }
+
+    {
+        let file = Path::new("sample.bmp");
+        let image = try!(surf::Surface::from_bmp(&file));
+        image.with_lock(|pixels| {
+            unsafe {
+                gl::TexImage2D(gl::TEXTURE_2D, 0, gl::RGB as GLint,
+                               image.get_width() as GLsizei, image.get_height() as GLsizei,
+                               0, gl::RGBA, gl::UNSIGNED_BYTE, pixels.as_ptr() as *libc::c_void);
+            }
+        });
+    }
+
+    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
+    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
+    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as GLint);
+    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as GLint);
+
+
+    if false {
+        gl::BindTexture(gl::TEXTURE_2D, tex);
+
+        // let color : ~[f32] = ~[1.0, 0.0, 0.0, 1.0];
+        // unsafe { gl::TexParameterfv(gl::TEXTURE_2D, gl::TEXTURE_BORDER_COLOR, color.as_ptr()); }
+
+
+        gl::GenerateMipmap(gl::TEXTURE_2D);
+
+        // Black/white checkerboard
+        let pixels = ~[0.0, 0.0, 0.0,   1.0, 1.0, 1.0,
+                       1.0, 1.0, 1.0,   0.0, 0.0, 0.0];
+        unsafe {
+            gl::TexImage2D(gl::TEXTURE_2D, 0, gl::RGB as GLint,
+                           2, 2, 0, gl::BGR, gl::UNSIGNED_BYTE, pixels.as_ptr() as *libc::c_void);
+        }
+
+        let _uniColor = {
+            let name = "triangleColor".to_c_str();
+            name.with_ref(|n| unsafe { gl::GetUniformLocation(shaderProgram, n) })
+        };
+
+        unsafe {
+            gl::VertexAttribPointer(posAttrib as GLuint, 2, gl::FLOAT, gl::FALSE, 7*mem::size_of::<f32>() as GLsizei, ptr::null());
+            gl::VertexAttribPointer(colAttrib as GLuint, 3, gl::FLOAT, gl::FALSE, 7*mem::size_of::<f32>() as GLsizei,
+                                    cast::transmute::<uint, *libc::c_void>(5*mem::size_of::<f32>()));
+        }
+    }
+
+    loop {
+        let windowEvent = evt::poll_event();
+        match windowEvent {
+            QuitEvent(_) |
+            KeyUpEvent(_, _, key::EscapeKey, _, _) => break,
+            _ => {}
+        }
+
+        // Clear the screen to black
+        gl::ClearColor(0.0f32, 0.0f32, 0.0f32, 1.0f32);
+        gl::Clear(gl::COLOR_BUFFER_BIT);
+
+        // Draw a rectangle from the two triangles using 6 indices
+        unsafe { gl::DrawElements(gl::TRIANGLES, 6, gl::UNSIGNED_INT, ptr::null()); }
+
+        win.gl_swap_window();
+    }
+
+    Ok(())
 }
 
 fn hello() -> Result<(), ~str> {
