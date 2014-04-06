@@ -28,6 +28,9 @@ use sdl::event::MouseMotionEvent;
 
 use gl::types::{GLchar, GLint, GLuint, GLsizei, GLsizeiptr};
 
+use self::high_level::{VertexArrayObj, VertexBufferObj, ElementsBufferObj,
+                       VertexShader, FragmentShader, ShaderProgram};
+
 #[start]
 pub fn start(argc: int, argv: **u8) -> int {
     native::start(argc, argv, main)
@@ -105,140 +108,150 @@ fn open_gl_init() -> Result<(~vid::Window,~vid::GLContext), ~str> {
     Ok((win, context))
 }
 
-struct VertexArrayObj { vao: GLuint }
-impl VertexArrayObj {
-    fn new() -> VertexArrayObj {
-        let mut vao : GLuint = 0;
-        unsafe {
-            gl::GenVertexArrays(1, &mut vao);
-            gl::BindVertexArray(vao);
-        }
-        VertexArrayObj { vao: vao }
-    }
-}
+pub mod high_level {
+    use std::cast;
+    use std::libc;
+    use std::mem;
+    use std::os;
+    use std::ptr;
+    use std::str;
 
-struct VertexBufferObj { vbo: GLuint }
-impl VertexBufferObj {
-    fn new() -> VertexBufferObj {
-        let mut vbo : GLuint = 0;
-        unsafe {
-            gl::GenBuffers(1, &mut vbo); // Generate 1 buffer
-        }
-        VertexBufferObj { vbo: vbo }
-    }
+    use gl;
+    use gl::types::{GLchar, GLint, GLuint, GLsizei, GLsizeiptr};
 
-    fn bind_array(&self, vertices: &[f32]) {
-        unsafe {
-            gl::BindBuffer(gl::ARRAY_BUFFER, self.vbo);
-            let vertices_size = vertices.len() * mem::size_of::<f32>();
-            gl::BufferData(gl::ARRAY_BUFFER,
-                           vertices_size as GLsizeiptr,
-                           vertices.as_ptr() as *libc::c_void,
-                           gl::STATIC_DRAW);
+    pub struct VertexArrayObj { vao: GLuint }
+    impl VertexArrayObj {
+        pub fn new() -> VertexArrayObj {
+            let mut vao : GLuint = 0;
+            unsafe {
+                gl::GenVertexArrays(1, &mut vao);
+                gl::BindVertexArray(vao);
+            }
+            VertexArrayObj { vao: vao }
         }
     }
-}
 
-struct ElementsBufferObj { ebo: GLuint }
-impl ElementsBufferObj {
-    fn new() -> ElementsBufferObj {
-        let mut ebo : GLuint = 0;
-        unsafe { gl::GenBuffers(1, &mut ebo); }
-        ElementsBufferObj { ebo: ebo }
-    }
-
-    fn bind_array(&self, elements: &[GLuint]) {
-        gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, self.ebo);
-        unsafe {
-            gl::BufferData(gl::ELEMENT_ARRAY_BUFFER,
-                           (mem::size_of::<GLuint>() * elements.len()) as i64,
-                           elements.as_ptr() as *libc::c_void,
-                           gl::STATIC_DRAW);
+    pub struct VertexBufferObj { vbo: GLuint }
+    impl VertexBufferObj {
+        pub fn new() -> VertexBufferObj {
+            let mut vbo : GLuint = 0;
+            unsafe {
+                gl::GenBuffers(1, &mut vbo); // Generate 1 buffer
+            }
+            VertexBufferObj { vbo: vbo }
         }
-    }
-}
 
-struct VertexShader { vertexShader: GLuint }
-impl VertexShader {
-    fn gluint(&self) -> GLuint { self.vertexShader }
-    fn new() -> VertexShader {
-        VertexShader { vertexShader: gl::CreateShader(gl::VERTEX_SHADER) }
-    }
-    fn source(&self, vertexSource: &str) {
-        unsafe {
-            let vertexSource = vertexSource.to_c_str();
-            vertexSource.with_ref(|p| {
-                let tmp = ~[p];
-                gl::ShaderSource(self.vertexShader, 1, tmp.as_ptr() as **GLchar, ptr::null());
-                gl::CompileShader(self.vertexShader);
-            });
-            let mut status : GLint = 0;
-            gl::GetShaderiv(self.vertexShader, gl::COMPILE_STATUS, &mut status);
-            if status != gl::TRUE as GLint {
-                let mut buffer = Vec::from_elem(512, 0 as libc::c_char);
-                gl::GetShaderInfoLog(self.vertexShader, 512, ptr::mut_null(), buffer.as_mut_ptr());
-                let buffer : Vec<char> = buffer.iter().map(|&c| c as u8 as char).collect();
-                let end = buffer.iter().position(|&c|c == '\0').unwrap();
-                fail!("vertexShader compilation failure {}", str::from_chars(buffer.slice_to(end)));
+        pub fn bind_array(&self, vertices: &[f32]) {
+            unsafe {
+                gl::BindBuffer(gl::ARRAY_BUFFER, self.vbo);
+                let vertices_size = vertices.len() * mem::size_of::<f32>();
+                gl::BufferData(gl::ARRAY_BUFFER,
+                               vertices_size as GLsizeiptr,
+                               vertices.as_ptr() as *libc::c_void,
+                               gl::STATIC_DRAW);
             }
         }
     }
-}
 
-struct FragmentShader { fragmentShader: GLuint }
-impl FragmentShader {
-    fn gluint(&self) -> GLuint { self.fragmentShader }
-    fn new() -> FragmentShader {
-        let fragmentShader = gl::CreateShader(gl::FRAGMENT_SHADER);
-        FragmentShader { fragmentShader: fragmentShader }
-    }
-    fn source(&self, fragmentSource: &str) {
-        unsafe {
-            let fragmentSource = fragmentSource.to_c_str();
-            fragmentSource.with_ref(|p| {
-                let tmp = ~[p];
-                gl::ShaderSource(self.fragmentShader, 1, tmp.as_ptr() as **GLchar, ptr::null());
-                gl::CompileShader(self.fragmentShader);
-            });
-            let mut status : GLint = 0;
-            gl::GetShaderiv(self.fragmentShader, gl::COMPILE_STATUS, &mut status);
-            if status != gl::TRUE as GLint {
-                let mut buffer = Vec::from_elem(512, 0 as libc::c_char);
-                gl::GetShaderInfoLog(self.fragmentShader, 512, ptr::mut_null(), buffer.as_mut_ptr());
-                let buffer : Vec<char> = buffer.iter().map(|&c| c as u8 as char).collect();
-                let end = buffer.iter().position(|&c|c == '\0').unwrap();
-                fail!("fragmentShader compilation failure {}", str::from_chars(buffer.slice_to(end)));
+    pub struct ElementsBufferObj { ebo: GLuint }
+    impl ElementsBufferObj {
+        pub fn new() -> ElementsBufferObj {
+            let mut ebo : GLuint = 0;
+            unsafe { gl::GenBuffers(1, &mut ebo); }
+            ElementsBufferObj { ebo: ebo }
+        }
+
+        pub fn bind_array(&self, elements: &[GLuint]) {
+            gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, self.ebo);
+            unsafe {
+                gl::BufferData(gl::ELEMENT_ARRAY_BUFFER,
+                               (mem::size_of::<GLuint>() * elements.len()) as i64,
+                               elements.as_ptr() as *libc::c_void,
+                               gl::STATIC_DRAW);
             }
         }
     }
-}
 
-struct ShaderProgram { shaderProgram: GLuint }
-impl ShaderProgram {
-    fn new() -> ShaderProgram {
-        let shaderProgram = gl::CreateProgram();
-        ShaderProgram { shaderProgram: shaderProgram }
+    pub struct VertexShader { vertexShader: GLuint }
+    impl VertexShader {
+        pub fn new() -> VertexShader {
+            VertexShader { vertexShader: gl::CreateShader(gl::VERTEX_SHADER) }
+        }
+        pub fn source(&self, vertexSource: &str) {
+            unsafe {
+                let vertexSource = vertexSource.to_c_str();
+                vertexSource.with_ref(|p| {
+                    let tmp = ~[p];
+                    gl::ShaderSource(self.vertexShader, 1, tmp.as_ptr() as **GLchar, ptr::null());
+                    gl::CompileShader(self.vertexShader);
+                });
+                let mut status : GLint = 0;
+                gl::GetShaderiv(self.vertexShader, gl::COMPILE_STATUS, &mut status);
+                if status != gl::TRUE as GLint {
+                    let mut buffer = Vec::from_elem(512, 0 as libc::c_char);
+                    gl::GetShaderInfoLog(self.vertexShader, 512, ptr::mut_null(), buffer.as_mut_ptr());
+                    let buffer : Vec<char> = buffer.iter().map(|&c| c as u8 as char).collect();
+                    let end = buffer.iter().position(|&c|c == '\0').unwrap();
+                    fail!("vertexShader compilation failure {}", str::from_chars(buffer.slice_to(end)));
+                }
+            }
+        }
     }
-    fn attach_shaders(&self, vs: &VertexShader, fs: &FragmentShader) {
-        gl::AttachShader(self.shaderProgram, vs.gluint());
-        gl::AttachShader(self.shaderProgram, fs.gluint());
+
+    pub struct FragmentShader { fragmentShader: GLuint }
+    impl FragmentShader {
+        pub fn new() -> FragmentShader {
+            let fragmentShader = gl::CreateShader(gl::FRAGMENT_SHADER);
+            FragmentShader { fragmentShader: fragmentShader }
+        }
+        pub fn source(&self, fragmentSource: &str) {
+            unsafe {
+                let fragmentSource = fragmentSource.to_c_str();
+                fragmentSource.with_ref(|p| {
+                    let tmp = ~[p];
+                    gl::ShaderSource(self.fragmentShader, 1, tmp.as_ptr() as **GLchar, ptr::null());
+                    gl::CompileShader(self.fragmentShader);
+                });
+                let mut status : GLint = 0;
+                gl::GetShaderiv(self.fragmentShader, gl::COMPILE_STATUS, &mut status);
+                if status != gl::TRUE as GLint {
+                    let mut buffer = Vec::from_elem(512, 0 as libc::c_char);
+                    gl::GetShaderInfoLog(self.fragmentShader, 512, ptr::mut_null(), buffer.as_mut_ptr());
+                    let buffer : Vec<char> = buffer.iter().map(|&c| c as u8 as char).collect();
+                    let end = buffer.iter().position(|&c|c == '\0').unwrap();
+                    fail!("fragmentShader compilation failure {}", str::from_chars(buffer.slice_to(end)));
+                }
+            }
+        }
     }
-    unsafe fn bind_frag_data_location(&self, color: u32, name: &str) {
-        let name = name.to_c_str();
-        name.with_ref(|n| gl::BindFragDataLocation(self.shaderProgram, color, n));
-    }
-    fn link_and_use(&self) {
-        gl::LinkProgram(self.shaderProgram);
-        gl::UseProgram(self.shaderProgram);
-    }
-    unsafe fn get_attrib_location(&self, name: &str) -> GLint {
-        let name = name.to_c_str();
-        let posAttrib = name.with_ref(|n| gl::GetAttribLocation(self.shaderProgram, n));
-        posAttrib
-    }
-    fn get_uniform_location(&self, name: &str) -> GLint {
-        let name = name.to_c_str();
-        name.with_ref(|n| unsafe { gl::GetUniformLocation(self.shaderProgram, n) })
+
+    pub struct ShaderProgram { shaderProgram: GLuint }
+    impl ShaderProgram {
+        pub fn new() -> ShaderProgram {
+            let shaderProgram = gl::CreateProgram();
+            ShaderProgram { shaderProgram: shaderProgram }
+        }
+        pub fn attach_shaders(&self, vs: &VertexShader, fs: &FragmentShader) {
+            gl::AttachShader(self.shaderProgram, vs.vertexShader);
+            gl::AttachShader(self.shaderProgram, fs.fragmentShader);
+        }
+        pub unsafe fn bind_frag_data_location(&self, color: u32, name: &str) {
+            let name = name.to_c_str();
+            name.with_ref(|n| gl::BindFragDataLocation(self.shaderProgram, color, n));
+        }
+        pub fn link_and_use(&self) {
+            gl::LinkProgram(self.shaderProgram);
+            gl::UseProgram(self.shaderProgram);
+        }
+        pub unsafe fn get_attrib_location(&self, name: &str) -> GLint {
+            let name = name.to_c_str();
+            let posAttrib = name.with_ref(|n| gl::GetAttribLocation(self.shaderProgram, n));
+            posAttrib
+        }
+        pub unsafe fn get_uniform_location(&self, name: &str) -> GLint {
+            let name = name.to_c_str();
+            name.with_ref(|n| gl::GetUniformLocation(self.shaderProgram, n))
+        }
     }
 }
 
@@ -313,7 +326,7 @@ void main()
                                 5*mem::size_of::<f32>() as GLsizei,
                                 cast::transmute::<uint, *libc::c_void>(2*mem::size_of::<f32>()));
     }
-    let uniColor = shaderProgram.get_uniform_location("triangleColor");
+    let uniColor = unsafe { shaderProgram.get_uniform_location("triangleColor") };
 
     let elements : ~[GLuint] = ~[0, 1, 2, 2, 3, 0];
     let ebo = ElementsBufferObj::new();
@@ -420,19 +433,15 @@ void main()
     fragmentShader.source(fragmentSource);
 
     // Link the vertex and fragment shader into a shader program
-    let shaderProgram = gl::CreateProgram();
+    let shaderProgram = ShaderProgram::new();
     unsafe {
-        gl::AttachShader(shaderProgram, vertexShader.gluint());
-        gl::AttachShader(shaderProgram, fragmentShader.gluint());
-        let name = "outColor".to_c_str();
-        name.with_ref(|n| gl::BindFragDataLocation(shaderProgram, 0, n));
-        gl::LinkProgram(shaderProgram);
-        gl::UseProgram(shaderProgram);
+        shaderProgram.attach_shaders(&vertexShader, &fragmentShader);
+        shaderProgram.bind_frag_data_location(0, "outColor");
+        shaderProgram.link_and_use();
     }
 
     // Specify the layout of the vertex data
-    let name = "position".to_c_str();
-    let posAttrib = name.with_ref(|n| unsafe { gl::GetAttribLocation(shaderProgram, n) });
+    let posAttrib = unsafe { shaderProgram.get_attrib_location("position") };
     gl::EnableVertexAttribArray(posAttrib as GLuint);
     unsafe {
         gl::VertexAttribPointer(posAttrib as GLuint,
@@ -441,8 +450,7 @@ void main()
                                 ptr::null());
     }
 
-    let name = "color".to_c_str();
-    let colAttrib = name.with_ref(|n| unsafe { gl::GetAttribLocation(shaderProgram, n) });
+    let colAttrib = unsafe { shaderProgram.get_attrib_location("color") };
     gl::EnableVertexAttribArray(colAttrib as GLuint);
     unsafe {
         gl::VertexAttribPointer(colAttrib as GLuint,
@@ -451,8 +459,7 @@ void main()
                                 cast::transmute::<uint, *libc::c_void>(2*mem::size_of::<f32>()));
     }
 
-    let name = "texcoord".to_c_str();
-    let texAttrib = name.with_ref(|n| unsafe { gl::GetAttribLocation(shaderProgram, n) });
+    let texAttrib = unsafe { shaderProgram.get_attrib_location("texcoord") };
     gl::EnableVertexAttribArray(texAttrib as GLuint);
     unsafe {
         gl::VertexAttribPointer(texAttrib as GLuint,
@@ -478,8 +485,8 @@ void main()
             }
         });
     }
-    let name = "texKitten".to_c_str();
-    name.with_ref(|n| gl::Uniform1i(unsafe { gl::GetUniformLocation(shaderProgram, n) }, 0));
+
+    gl::Uniform1i(unsafe { shaderProgram.get_uniform_location("texKitten") }, 0);
 
     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
@@ -499,8 +506,8 @@ void main()
             }
         });
     }
-    let name = "texPuppy".to_c_str();
-    name.with_ref(|n|gl::Uniform1i(unsafe { gl::GetUniformLocation(shaderProgram, n) }, 1));
+
+    gl::Uniform1i(unsafe { shaderProgram.get_uniform_location("texPuppy") }, 1);
 
     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
