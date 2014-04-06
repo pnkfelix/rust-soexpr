@@ -164,7 +164,7 @@ void main()
         gl::GetShaderiv(fragmentShader, gl::COMPILE_STATUS, &mut status);
         if status != gl::TRUE as gl::types::GLint {
             let mut buffer = Vec::from_elem(512, 0 as libc::c_char);
-            gl::GetShaderInfoLog(vertexShader, 512, ptr::mut_null(), buffer.as_mut_ptr());
+            gl::GetShaderInfoLog(fragmentShader, 512, ptr::mut_null(), buffer.as_mut_ptr());
             let buffer : Vec<char> = buffer.iter().map(|&c| c as u8 as char).collect();
             let end = buffer.iter().position(|&c|c == '\0').unwrap();
             fail!("fragmentShader compilation failure {}", str::from_chars(buffer.slice_to(end)));
