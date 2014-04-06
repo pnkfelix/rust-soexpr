@@ -2,6 +2,7 @@
 
 extern crate native;
 extern crate rand;
+extern crate time;
 
 extern crate sdl = "sdl2";
 extern crate gl;
@@ -195,8 +196,6 @@ void main()
         name.with_ref(|n| unsafe { gl::GetUniformLocation(shaderProgram, n) })
     };
 
-    gl::Uniform3f(uniColor, 1.0, 0.0, 0.0);
-
     loop {
         let windowEvent = evt::poll_event();
         match windowEvent {
@@ -204,6 +203,9 @@ void main()
             KeyUpEvent(_, _, key::EscapeKey, _, _) => break,
             _ => {}
         }
+
+        let time_ = time::precise_time_s() as f32;
+        gl::Uniform3f(uniColor, ((time_*4.0).sin() + 1.0)/2.0, 0.0, 0.0);
 
         // Clear the screen to black
         gl::ClearColor(0.0f32, 0.0f32, 0.0f32, 1.0f32);
