@@ -213,6 +213,19 @@ void main()
         name.with_ref(|n| unsafe { gl::GetUniformLocation(shaderProgram, n) })
     };
 
+
+    let elements : ~[GLuint] = ~[0, 1, 2];
+    let mut ebo : GLuint = 0;
+    unsafe { gl::GenBuffers(1, &mut ebo); }
+
+    gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, ebo);
+    unsafe {
+        gl::BufferData(gl::ELEMENT_ARRAY_BUFFER,
+                       (mem::size_of::<GLuint>() * elements.len()) as i64,
+                       elements.as_ptr() as *libc::c_void,
+                       gl::STATIC_DRAW);
+    }
+
     loop {
         let windowEvent = evt::poll_event();
         match windowEvent {
@@ -229,7 +242,7 @@ void main()
         gl::Clear(gl::COLOR_BUFFER_BIT);
 
         // Draw a triangle from the 3 vertices
-        gl::DrawArrays(gl::TRIANGLES, 0, 3);
+        unsafe { gl::DrawElements(gl::TRIANGLES, 3, gl::UNSIGNED_INT, ptr::null()); }
 
         win.gl_swap_window();
     }
