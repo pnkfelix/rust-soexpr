@@ -139,6 +139,25 @@ impl VertexBufferObj {
     }
 }
 
+struct ElementsBufferObj { ebo: GLuint }
+impl ElementsBufferObj {
+    fn new() -> ElementsBufferObj {
+        let mut ebo : GLuint = 0;
+        unsafe { gl::GenBuffers(1, &mut ebo); }
+        ElementsBufferObj { ebo: ebo }
+    }
+
+    fn bind_array(&self, elements: &[GLuint]) {
+        gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, self.ebo);
+        unsafe {
+            gl::BufferData(gl::ELEMENT_ARRAY_BUFFER,
+                           (mem::size_of::<GLuint>() * elements.len()) as i64,
+                           elements.as_ptr() as *libc::c_void,
+                           gl::STATIC_DRAW);
+        }
+    }
+}
+
 fn open_gl_drawing() -> Result<(), ~str> {
     let (win, _context) = try!(open_gl_init());
 
@@ -255,16 +274,8 @@ void main()
 
 
     let elements : ~[GLuint] = ~[0, 1, 2, 2, 3, 0];
-    let mut ebo : GLuint = 0;
-    unsafe { gl::GenBuffers(1, &mut ebo); }
-
-    gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, ebo);
-    unsafe {
-        gl::BufferData(gl::ELEMENT_ARRAY_BUFFER,
-                       (mem::size_of::<GLuint>() * elements.len()) as i64,
-                       elements.as_ptr() as *libc::c_void,
-                       gl::STATIC_DRAW);
-    }
+    let ebo = ElementsBufferObj::new();
+    ebo.bind_array(elements);
 
     loop {
         let windowEvent = evt::poll_event();
@@ -353,19 +364,10 @@ void main()
 
     vbo.bind_array(vertices);
 
-    let mut ebo : GLuint = 0;
-    unsafe { gl::GenBuffers(1, &mut ebo); }
-
     let elements : ~[GLuint] = ~[0, 1, 2,
                                  2, 3, 0];
-
-    gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, ebo);
-    unsafe {
-        gl::BufferData(gl::ELEMENT_ARRAY_BUFFER,
-                       (mem::size_of::<GLuint>() * elements.len()) as i64,
-                       elements.as_ptr() as *libc::c_void,
-                       gl::STATIC_DRAW);
-    }
+    let ebo = ElementsBufferObj::new();
+    ebo.bind_array(elements);
 
     // Create and compile the vertex shader
     let vertexShader = gl::CreateShader(gl::VERTEX_SHADER);
