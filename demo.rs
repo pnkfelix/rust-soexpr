@@ -118,6 +118,9 @@ pub mod high_level {
     use std::ptr;
     use std::str;
 
+    use surf = sdl::surface;
+    use pix = sdl::pixels;
+
     use gl;
     use gl::types::{GLchar, GLint, GLuint, GLsizei, GLsizeiptr};
     use gl::types::{GLenum, GLboolean, GLvoid, GLfloat};
@@ -347,6 +350,30 @@ pub mod high_level {
             gl::Uniform3f(self.attrib, v0, v1, v2);
         }
     }
+
+    pub fn tex_image_2d(image: &surf::Surface, level: GLint, border: GLint) {
+        let format = unsafe { (*image.get_pixel_format().raw).format };
+        let (format, xfer_type) = match format {
+            pix::ll::SDL_PIXELFORMAT_RGB444   => (gl::RGB4, gl::UNSIGNED_INT),
+            pix::ll::SDL_PIXELFORMAT_RGB555   => (gl::RGB5, gl::UNSIGNED_INT),
+            pix::ll::SDL_PIXELFORMAT_RGBA8888 => (gl::RGBA, gl::UNSIGNED_INT),
+            pix::ll::SDL_PIXELFORMAT_ARGB8888 => (gl::BGRA, gl::UNSIGNED_INT_8_8_8_8_REV),
+            _ => fail!("unhandled pixel_format in image: {:x}", format),
+        };
+        image.with_lock(|pixels| {
+            unsafe {
+                gl::TexImage2D(gl::TEXTURE_2D,                // target
+                               level,
+                               gl::RGB as GLint,              // internal format
+                               image.get_width() as GLsizei,
+                               image.get_height() as GLsizei,
+                               border,
+                               format,
+                               xfer_type,
+                               pixels.as_ptr() as *libc::c_void);
+            }
+        });
+    }
 }
 
 fn open_gl_drawing() -> Result<(), ~str> {
@@ -567,13 +594,7 @@ void main()
     {
         let file = Path::new("sample.bmp");
         let image = try!(surf::Surface::from_bmp(&file));
-        image.with_lock(|pixels| {
-            unsafe {
-                gl::TexImage2D(gl::TEXTURE_2D, 0, gl::RGB as GLint,
-                               image.get_width() as GLsizei, image.get_height() as GLsizei,
-                               0, gl::RGBA, gl::UNSIGNED_BYTE, pixels.as_ptr() as *libc::c_void);
-            }
-        });
+        high_level::tex_image_2d(image, 0, 0);
     }
 
     let uniCol = unsafe { shaderProgram.get_uniform_location("texKitten") };
@@ -589,13 +610,7 @@ void main()
     {
         let file = Path::new("sample2.bmp");
         let image = try!(surf::Surface::from_bmp(&file));
-        image.with_lock(|pixels| {
-            unsafe {
-                gl::TexImage2D(gl::TEXTURE_2D, 0, gl::RGB as GLint,
-                               image.get_width() as GLsizei, image.get_height() as GLsizei,
-                               0, gl::RGBA, gl::UNSIGNED_BYTE, pixels.as_ptr() as *libc::c_void);
-            }
-        });
+        high_level::tex_image_2d(image, 0, 0);
     }
 
     let uniCol = unsafe { shaderProgram.get_uniform_location("texPuppy") };
