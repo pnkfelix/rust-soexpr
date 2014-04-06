@@ -97,10 +97,7 @@ fn open_gl() -> Result<(), ~str> {
     let vertices : &[f32] = &[-0.5,  0.5, 1.0, 0.0, 0.0, // tl Vertex 1 (X, Y, ..Red)
                                0.5,  0.5, 0.0, 1.0, 0.0, // tr Vertex 2 (X, Y, ..Green)
                                0.5, -0.5, 0.0, 0.0, 1.0, // br Vertex 3 (X, Y, ..Blue)
-
-                               0.5, -0.5, 0.0, 0.0, 1.0, // br
-                              -0.5, -0.5, 1.0, 1.0, 1.0, // bl
-                              -0.5,  0.5, 1.0, 0.0, 0.0, // tl
+                              -0.5, -0.5, 1.0, 1.0, 1.0, // bl Vertex 4 (X, Y, .. White)
                                ];
 
     let mut vao : GLuint = 0;
@@ -218,7 +215,7 @@ void main()
     };
 
 
-    let elements : ~[GLuint] = ~[0, 1, 2];
+    let elements : ~[GLuint] = ~[0, 1, 2, 2, 3, 0];
     let mut ebo : GLuint = 0;
     unsafe { gl::GenBuffers(1, &mut ebo); }
 
@@ -245,8 +242,8 @@ void main()
         gl::ClearColor(0.0f32, 0.0f32, 0.0f32, 1.0f32);
         gl::Clear(gl::COLOR_BUFFER_BIT);
 
-        // Draw a rectangle from the two triangles / *6* vertices.
-        gl::DrawArrays(gl::TRIANGLES, 0, 6);
+        // Draw a rectangle from the two triangles from 4 distinct vertices.
+        unsafe { gl::DrawElements(gl::TRIANGLES, 6, gl::UNSIGNED_INT, ptr::null()); }
 
         win.gl_swap_window();
     }
