@@ -158,6 +158,33 @@ impl ElementsBufferObj {
     }
 }
 
+struct VertexShader { vertexShader: GLuint }
+impl VertexShader {
+    fn gluint(&self) -> GLuint { self.vertexShader }
+    fn new() -> VertexShader {
+        VertexShader { vertexShader: gl::CreateShader(gl::VERTEX_SHADER) }
+    }
+    fn source(&self, vertexSource: &str) {
+        unsafe {
+            let vertexSource = vertexSource.to_c_str();
+            vertexSource.with_ref(|p| {
+                let tmp = ~[p];
+                gl::ShaderSource(self.vertexShader, 1, tmp.as_ptr() as **GLchar, ptr::null());
+                gl::CompileShader(self.vertexShader);
+            });
+            let mut status : GLint = 0;
+            gl::GetShaderiv(self.vertexShader, gl::COMPILE_STATUS, &mut status);
+            if status != gl::TRUE as GLint {
+                let mut buffer = Vec::from_elem(512, 0 as libc::c_char);
+                gl::GetShaderInfoLog(self.vertexShader, 512, ptr::mut_null(), buffer.as_mut_ptr());
+                let buffer : Vec<char> = buffer.iter().map(|&c| c as u8 as char).collect();
+                let end = buffer.iter().position(|&c|c == '\0').unwrap();
+                fail!("vertexShader compilation failure {}", str::from_chars(buffer.slice_to(end)));
+            }
+        }
+    }
+}
+
 fn open_gl_drawing() -> Result<(), ~str> {
     let (win, _context) = try!(open_gl_init());
 
@@ -170,7 +197,7 @@ fn open_gl_drawing() -> Result<(), ~str> {
                               -0.5, -0.5, 1.0, 1.0, 1.0, // bl Vertex 4 (X, Y, .. White)
                                ];
 
-    let vao = VertexArrayObj::new();
+    let _vao = VertexArrayObj::new();
 
     let vbo = VertexBufferObj::new();
     vbo.bind_array(vertices);
@@ -202,24 +229,8 @@ void main()
 }
 "#;
 
-    let vertexShader = gl::CreateShader(gl::VERTEX_SHADER);
-    unsafe {
-        let vertexSource = vertexSource.to_c_str();
-        vertexSource.with_ref(|p| {
-            let tmp = ~[p];
-            gl::ShaderSource(vertexShader, 1, tmp.as_ptr() as **GLchar, ptr::null());
-            gl::CompileShader(vertexShader);
-        });
-        let mut status : GLint = 0;
-        gl::GetShaderiv(vertexShader, gl::COMPILE_STATUS, &mut status);
-        if status != gl::TRUE as GLint {
-            let mut buffer = Vec::from_elem(512, 0 as libc::c_char);
-            gl::GetShaderInfoLog(vertexShader, 512, ptr::mut_null(), buffer.as_mut_ptr());
-            let buffer : Vec<char> = buffer.iter().map(|&c| c as u8 as char).collect();
-            let end = buffer.iter().position(|&c|c == '\0').unwrap();
-            fail!("vertexShader compilation failure {}", str::from_chars(buffer.slice_to(end)));
-        }
-    }
+    let vertexShader = VertexShader::new();
+    vertexShader.source(vertexSource);
 
     let fragmentShader = gl::CreateShader(gl::FRAGMENT_SHADER);
     unsafe {
@@ -242,7 +253,7 @@ void main()
 
     let shaderProgram = gl::CreateProgram();
     unsafe {
-        gl::AttachShader(shaderProgram, vertexShader);
+        gl::AttachShader(shaderProgram, vertexShader.gluint());
         gl::AttachShader(shaderProgram, fragmentShader);
         let name = "outColor".to_c_str();
         name.with_ref(|n| gl::BindFragDataLocation(shaderProgram, 0, n));
@@ -351,7 +362,7 @@ void main()
 }
 "#);
 
-    let vao = VertexArrayObj::new();
+    let _vao = VertexArrayObj::new();
     let vbo = VertexBufferObj::new();
 
     let vertices : &[f32] = &[
@@ -370,24 +381,8 @@ void main()
     ebo.bind_array(elements);
 
     // Create and compile the vertex shader
-    let vertexShader = gl::CreateShader(gl::VERTEX_SHADER);
-    unsafe {
-        let vertexSource = vertexSource.to_c_str();
-        vertexSource.with_ref(|p| {
-            let tmp = ~[p];
-            gl::ShaderSource(vertexShader, 1, tmp.as_ptr() as **GLchar, ptr::null());
-            gl::CompileShader(vertexShader);
-        });
-        let mut status : GLint = 0;
-        gl::GetShaderiv(vertexShader, gl::COMPILE_STATUS, &mut status);
-        if status != gl::TRUE as GLint {
-            let mut buffer = Vec::from_elem(512, 0 as libc::c_char);
-            gl::GetShaderInfoLog(vertexShader, 512, ptr::mut_null(), buffer.as_mut_ptr());
-            let buffer : Vec<char> = buffer.iter().map(|&c| c as u8 as char).collect();
-            let end = buffer.iter().position(|&c|c == '\0').unwrap();
-            fail!("vertexShader compilation failure {}", str::from_chars(buffer.slice_to(end)));
-        }
-    }
+    let vertexShader = VertexShader::new();
+    vertexShader.source(vertexSource);
 
     // Create and compile the fragment shader
     let fragmentShader = gl::CreateShader(gl::FRAGMENT_SHADER);
@@ -411,7 +406,7 @@ void main()
     // Link the vertex and fragment shader into a shader program
     let shaderProgram = gl::CreateProgram();
     unsafe {
-        gl::AttachShader(shaderProgram, vertexShader);
+        gl::AttachShader(shaderProgram, vertexShader.gluint());
         gl::AttachShader(shaderProgram, fragmentShader);
         let name = "outColor".to_c_str();
         name.with_ref(|n| gl::BindFragDataLocation(shaderProgram, 0, n));
