@@ -1,4 +1,4 @@
-default: hello soe # do-demo
+default: open_gl # hello: $(DEMO)-dbg
 
 RUSTC=rustc
 DEMO_SRC=demo.rs
@@ -16,8 +16,11 @@ do-demo: $(DEMO)-dbg
 soe: $(DEMO)-dbg
 	./$< $@
 
+open_gl: $(DEMO)-dbg
+	RUST_BACKTRACE=1 ./$< $@
+
 hello: $(DEMO)-dbg
-	./$< $@
+	RUST_BACKTRACE=1 ./$< $@
 
 testsprite: $(DEMO)-dbg $(DEMO)
 	./$< $@
