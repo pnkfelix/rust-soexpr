@@ -185,6 +185,34 @@ impl VertexShader {
     }
 }
 
+struct FragmentShader { fragmentShader: GLuint }
+impl FragmentShader {
+    fn gluint(&self) -> GLuint { self.fragmentShader }
+    fn new() -> FragmentShader {
+        let fragmentShader = gl::CreateShader(gl::FRAGMENT_SHADER);
+        FragmentShader { fragmentShader: fragmentShader }
+    }
+    fn source(&self, fragmentSource: &str) {
+        unsafe {
+            let fragmentSource = fragmentSource.to_c_str();
+            fragmentSource.with_ref(|p| {
+                let tmp = ~[p];
+                gl::ShaderSource(self.fragmentShader, 1, tmp.as_ptr() as **GLchar, ptr::null());
+                gl::CompileShader(self.fragmentShader);
+            });
+            let mut status : GLint = 0;
+            gl::GetShaderiv(self.fragmentShader, gl::COMPILE_STATUS, &mut status);
+            if status != gl::TRUE as GLint {
+                let mut buffer = Vec::from_elem(512, 0 as libc::c_char);
+                gl::GetShaderInfoLog(self.fragmentShader, 512, ptr::mut_null(), buffer.as_mut_ptr());
+                let buffer : Vec<char> = buffer.iter().map(|&c| c as u8 as char).collect();
+                let end = buffer.iter().position(|&c|c == '\0').unwrap();
+                fail!("fragmentShader compilation failure {}", str::from_chars(buffer.slice_to(end)));
+            }
+        }
+    }
+}
+
 fn open_gl_drawing() -> Result<(), ~str> {
     let (win, _context) = try!(open_gl_init());
 
@@ -232,29 +260,13 @@ void main()
     let vertexShader = VertexShader::new();
     vertexShader.source(vertexSource);
 
-    let fragmentShader = gl::CreateShader(gl::FRAGMENT_SHADER);
-    unsafe {
-        let fragmentSource = fragmentSource.to_c_str();
-        fragmentSource.with_ref(|p| {
-            let tmp = ~[p];
-            gl::ShaderSource(fragmentShader, 1, tmp.as_ptr() as **GLchar, ptr::null());
-            gl::CompileShader(fragmentShader);
-        });
-        let mut status : GLint = 0;
-        gl::GetShaderiv(fragmentShader, gl::COMPILE_STATUS, &mut status);
-        if status != gl::TRUE as GLint {
-            let mut buffer = Vec::from_elem(512, 0 as libc::c_char);
-            gl::GetShaderInfoLog(fragmentShader, 512, ptr::mut_null(), buffer.as_mut_ptr());
-            let buffer : Vec<char> = buffer.iter().map(|&c| c as u8 as char).collect();
-            let end = buffer.iter().position(|&c|c == '\0').unwrap();
-            fail!("fragmentShader compilation failure {}", str::from_chars(buffer.slice_to(end)));
-        }
-    }
+    let fragmentShader = FragmentShader::new();
+    fragmentShader.source(fragmentSource);
 
     let shaderProgram = gl::CreateProgram();
     unsafe {
         gl::AttachShader(shaderProgram, vertexShader.gluint());
-        gl::AttachShader(shaderProgram, fragmentShader);
+        gl::AttachShader(shaderProgram, fragmentShader.gluint());
         let name = "outColor".to_c_str();
         name.with_ref(|n| gl::BindFragDataLocation(shaderProgram, 0, n));
         gl::LinkProgram(shaderProgram);
@@ -385,29 +397,14 @@ void main()
     vertexShader.source(vertexSource);
 
     // Create and compile the fragment shader
-    let fragmentShader = gl::CreateShader(gl::FRAGMENT_SHADER);
-    unsafe {
-        let fragmentSource = fragmentSource.to_c_str();
-        fragmentSource.with_ref(|p| {
-            let tmp = ~[p];
-            gl::ShaderSource(fragmentShader, 1, tmp.as_ptr() as **GLchar, ptr::null());
-            gl::CompileShader(fragmentShader);
-        });
-        let mut status : GLint = 0;
-        gl::GetShaderiv(fragmentShader, gl::COMPILE_STATUS, &mut status);
-        if status != gl::TRUE as GLint {
-            let mut buffer = Vec::from_elem(512, 0 as libc::c_char);
-            gl::GetShaderInfoLog(fragmentShader, 512, ptr::mut_null(), buffer.as_mut_ptr());
-            let buffer : Vec<char> = buffer.iter().map(|&c| c as u8 as char).collect();
-            let end = buffer.iter().position(|&c|c == '\0').unwrap();
-            fail!("fragmentShader compilation failure {}", str::from_chars(buffer.slice_to(end)));
-        }
-    }
+    let fragmentShader = FragmentShader::new();
+    fragmentShader.source(fragmentSource);
+
     // Link the vertex and fragment shader into a shader program
     let shaderProgram = gl::CreateProgram();
     unsafe {
         gl::AttachShader(shaderProgram, vertexShader.gluint());
-        gl::AttachShader(shaderProgram, fragmentShader);
+        gl::AttachShader(shaderProgram, fragmentShader.gluint());
         let name = "outColor".to_c_str();
         name.with_ref(|n| gl::BindFragDataLocation(shaderProgram, 0, n));
         gl::LinkProgram(shaderProgram);
