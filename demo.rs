@@ -31,6 +31,7 @@ use gl::types::{GLfloat};
 
 use self::high_level::{VertexArrayObj, VertexBufferObj, ElementsBufferObj,
                        VertexShader, FragmentShader, ShaderProgram};
+use self::high_level::{TextureUnit};
 use self::high_level::{VertexAttribPointerArgsFrom, VertexAttribPointerArgs};
 
 #[start]
@@ -374,6 +375,28 @@ pub mod high_level {
             }
         });
     }
+
+    pub struct TextureUnit { glenum: GLenum }
+    impl TextureUnit {
+        pub fn from_byte(b: u8) -> TextureUnit {
+            TextureUnit { glenum: gl::TEXTURE0 + (b as GLenum) }
+        }
+        pub fn active(&self) {
+            gl::ActiveTexture(self.glenum);
+        }
+
+        pub fn with_active<A>(&self, f: || -> A) -> A {
+            let mut result : GLint = 0;
+            unsafe { gl::GetIntegerv(gl::ACTIVE_TEXTURE, &mut result); }
+            let prev = result;
+            // debug!("switching from {:x} to {:x}", prev, self.glenum);
+            self.active();
+            let res = f();
+            // debug!("switching back to {:x} from {:x} ", prev, self.glenum);
+            gl::ActiveTexture(prev as GLuint);
+            res
+        }
+    }
 }
 
 fn open_gl_drawing() -> Result<(), ~str> {
@@ -589,37 +612,43 @@ void main()
     let mut textures : ~[GLuint] = ~[ 0, 0 ];
     unsafe { gl::GenTextures(2, textures.as_mut_ptr()); }
 
-    gl::ActiveTexture(gl::TEXTURE0);
-    gl::BindTexture(gl::TEXTURE_2D, textures[0]);
-    {
-        let file = Path::new("sample.bmp");
-        let image = try!(surf::Surface::from_bmp(&file));
-        high_level::tex_image_2d(image, 0, 0);
-    }
+    let tunit0 = TextureUnit::from_byte(0);
+    try!(tunit0.with_active(|| {
+        gl::BindTexture(gl::TEXTURE_2D, textures[0]);
+        {
+            let file = Path::new("sample.bmp");
+            let image = try!(surf::Surface::from_bmp(&file));
+            high_level::tex_image_2d(image, 0, 0);
+        }
 
-    let uniCol = unsafe { shaderProgram.get_uniform_location("texKitten") };
-    uniCol.uniform1i(0);
+        let uniCol = unsafe { shaderProgram.get_uniform_location("texKitten") };
+        uniCol.uniform1i(0);
 
-    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
-    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
-    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as GLint);
-    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as GLint);
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as GLint);
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as GLint);
+        Ok(())
+    }));
 
-    gl::ActiveTexture(gl::TEXTURE1);
-    gl::BindTexture(gl::TEXTURE_2D, textures[1]);
-    {
-        let file = Path::new("sample2.bmp");
-        let image = try!(surf::Surface::from_bmp(&file));
-        high_level::tex_image_2d(image, 0, 0);
-    }
+    let tunit1 = TextureUnit::from_byte(1);
+    try!(tunit1.with_active(|| {
+        gl::BindTexture(gl::TEXTURE_2D, textures[1]);
+        {
+            let file = Path::new("sample2.bmp");
+            let image = try!(surf::Surface::from_bmp(&file));
+            high_level::tex_image_2d(image, 0, 0);
+        }
 
-    let uniCol = unsafe { shaderProgram.get_uniform_location("texPuppy") };
-    uniCol.uniform1i(1);
+        let uniCol = unsafe { shaderProgram.get_uniform_location("texPuppy") };
+        uniCol.uniform1i(1);
 
-    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
-    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
-    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as GLint);
-    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as GLint);
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as GLint);
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as GLint);
+        Ok(())
+    }));
 
     loop {
         let windowEvent = evt::poll_event();
