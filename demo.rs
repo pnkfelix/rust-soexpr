@@ -11,6 +11,8 @@ extern crate opengles;
 
 extern crate gl;
 
+extern crate time;
+
 use std::cast;
 use std::mem;
 use std::os;
@@ -155,9 +157,10 @@ static VS_SRC: &'static str =
 
 static FS_SRC: &'static str =
    "#version 150 core
+    uniform vec3 triangle_color;
     out vec4 out_color;
     void main() {
-       out_color = vec4(1.0, 1.0, 1.0, 1.0);
+       out_color = vec4(triangle_color, 1.0);
     }";
 
 
@@ -193,14 +196,32 @@ static FS_SRC: &'static str =
                                 gl::FALSE as GLboolean, 0, ptr::null());
     }
 
-    gl::ClearColor(0.3, 0.3, 0.3, 1.0);
-    gl::Clear(gl::COLOR_BUFFER_BIT);
+    let uni_color = unsafe {
+        "triangle_color".with_c_str(|ptr| gl::GetUniformLocation(program, ptr))
+    };
 
-    // Draw a triangle from the 3 vertices
-    gl::DrawArrays(gl::TRIANGLES, 0, 3);
-    win.gl_swap_window();
+    loop {
+        match evt::poll_event() {
+            evt::QuitEvent(_) | evt::KeyUpEvent(_, _, key::EscapeKey, _, _)
+                => break,
+            _ => {}
+        }
 
-    sdl::timer::delay(2000);
+        // Use a uniform red
+        // gl::Uniform3f(uni_color, 1.0, 0.0, 0.0);
+
+        let time = time::precise_time_s();
+        gl::Uniform3f(uni_color, ((time+4.0).sin() as f32 + 1.0)/2.0, 0.0, 0.0);
+
+        gl::ClearColor(0.3, 0.3, 0.3, 1.0);
+        gl::Clear(gl::COLOR_BUFFER_BIT);
+
+        // Draw a triangle from the 3 vertices
+        gl::DrawArrays(gl::TRIANGLES, 0, 3);
+        win.gl_swap_window();
+    }
+
+    // sdl::timer::delay(2000);
 
     return Ok(());
 
