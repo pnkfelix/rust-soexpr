@@ -1,3 +1,5 @@
+#![feature(globs)]
+
 #![allow(unused_imports)] // don't warn me about this right now
 
 extern crate native;
@@ -5,7 +7,18 @@ extern crate rand;
 
 extern crate sdl = "sdl2";
 
+extern crate opengles;
+
+extern crate gl;
+
+use std::cast;
+use std::mem;
 use std::os;
+use std::ptr;
+use std::str;
+use std::vec;
+
+use gl::types::*;
 
 use evt = sdl::event;
 use vid = sdl::video;
@@ -45,6 +58,11 @@ fn dispatch(driver: &str, variant: &str, _args: &[~str]) {
 */
         "hello"
             => hello().unwrap(),
+        "gl"
+            => match gl() {
+                Ok(_) => {}
+                Err(s) => { fail!("gl failed: {}", s); }
+            },
         _otherwise
             => default().unwrap(),
     }
@@ -53,6 +71,310 @@ fn dispatch(driver: &str, variant: &str, _args: &[~str]) {
 mod tests {
 //    pub mod testsprite;
 //    pub mod soe;
+}
+
+fn gl() -> Result<(), ~str> {
+
+    let (width, height) = (800, 600);
+
+    try!(sdl::init([sdl::InitVideo]));
+
+    match vid::gl_load_library(None) {
+        Ok(()) => {},
+        Err(s) => {
+            println!("gl_load_library() failed: {}", s);
+            return Err(s)
+        }
+    }
+
+    vid::gl_set_attribute(vid::GLContextMajorVersion, 3);
+    vid::gl_set_attribute(vid::GLContextMinorVersion, 2);
+    vid::gl_set_attribute(vid::GLContextProfileMask,
+                          vid::ll::SDL_GL_CONTEXT_PROFILE_CORE as int);
+
+
+    // THis is some code I put in when I was desparately trying to get
+    // things to work.  I am stil lnot clear on how far it actually
+    // got me; I'm surprised I left it in as long as I did, when it
+    // seems to not actually matter at all in the end, compared to
+    // simply not creating a Renderer (see below).a
+    /*
+    {
+        // vid::ll::GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT
+        let flags = vid::gl_get_attribute(vid::GLContextFlags);
+        let flags = match flags {
+            Ok(f) => f,
+            Err(s) => return Err(s),
+        };
+        vid::gl_set_attribute(vid::GLContextFlags, 1 | flags);
+    }
+     */
+
+    let win = try!(
+        vid::Window::new("Hello World", 100, 100, width, height,
+                         [vid::Shown]));
+
+    let _ctxt = try!(win.gl_create_context());
+
+    // UGH: if you create a window without the vid::OpenGL flag above,
+    // then doing Renderer::from_window resets the PROFILE_MASK state
+    // to 0 (and in general seems to cause a re-initialiation of
+    // OpenGL in general).  The best way to avoid this, AFAICT, is to
+    // just not ever create a Renderer from a window at all.  SDL2
+    // itself could probably do a better job of helping the user catch
+    // this sort of bug, but failing that, maybe rust-sdl2 could
+    // provide some way to prevent this sort of bug.
+    /*
+    {
+        println!("before rend::Renderer::from_window");
+        let ren = try!(rend::Renderer::from_window(
+            win, rend::DriverAuto, [rend::Accelerated, rend::TargetTexture]));
+        println!("after rend::Renderer::from_window");
+    }
+     */
+
+    // vid::gl_set_swap_interval(1) || fail!("oops");
+
+    gl::load_with(vid::gl_get_proc_address);
+
+
+// Vertex data
+static VERTEX_DATA: [GLfloat, ..6] = [
+     0.0,  0.5,
+     0.5, -0.5,
+    -0.5, -0.5
+];
+
+// Shader sources
+static VS_SRC: &'static str =
+   "#version 150 core\n\
+    in vec2 position;\n\
+    void main() {\n\
+       gl_Position = vec4(position, 0.0, 1.0);\n\
+    }";
+
+static FS_SRC: &'static str =
+   "#version 150 core\n\
+    out vec4 out_color;\n\
+    void main() {\n\
+       out_color = vec4(1.0, 1.0, 1.0, 1.0);\n\
+    }";
+
+
+    // Create GLSL shaders
+    let vs = compile_shader(VS_SRC, gl::VERTEX_SHADER);
+    let fs = compile_shader(FS_SRC, gl::FRAGMENT_SHADER);
+    let program = link_program(vs, fs);
+
+    let mut vao = 0;
+    let mut vbo = 0;
+
+    unsafe {
+        // Create Vertex Array Object
+        gl::GenVertexArrays(1, &mut vao);
+        gl::BindVertexArray(vao);
+
+        // Create a Vertex Buffer Object and copy the vertex data to it
+        gl::GenBuffers(1, &mut vbo);
+        gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
+        gl::BufferData(gl::ARRAY_BUFFER,
+                       (VERTEX_DATA.len() * mem::size_of::<GLfloat>()) as GLsizeiptr,
+                       cast::transmute(&VERTEX_DATA[0]),
+                       gl::STATIC_DRAW);
+
+        // Use shader program
+        gl::UseProgram(program);
+        "out_color".with_c_str(|ptr| gl::BindFragDataLocation(program, 0, ptr));
+
+        // Specify the layout of the vertex data
+        let pos_attr = "position".with_c_str(|ptr| gl::GetAttribLocation(program, ptr));
+        gl::EnableVertexAttribArray(pos_attr as GLuint);
+        gl::VertexAttribPointer(pos_attr as GLuint, 2, gl::FLOAT,
+                                gl::FALSE as GLboolean, 0, ptr::null());
+    }
+
+    gl::ClearColor(0.3, 0.3, 0.3, 1.0);
+    gl::Clear(gl::COLOR_BUFFER_BIT);
+
+    // Draw a triangle from the 3 vertices
+    gl::DrawArrays(gl::TRIANGLES, 0, 3);
+    win.gl_swap_window();
+
+    sdl::timer::delay(2000);
+
+    return Ok(());
+
+fn compile_shader(src: &str, ty: GLenum) -> GLuint {
+    let shader = gl::CreateShader(ty);
+    unsafe {
+        // Attempt to compile the shader
+        src.with_c_str(|ptr| gl::ShaderSource(shader, 1, &ptr, ptr::null()));
+        gl::CompileShader(shader);
+
+        // Get the compile status
+        let mut status = gl::FALSE as GLint;
+        gl::GetShaderiv(shader, gl::COMPILE_STATUS, &mut status);
+
+        // Fail on error
+        if status != (gl::TRUE as GLint) {
+            let mut len = 0;
+            gl::GetShaderiv(shader, gl::INFO_LOG_LENGTH, &mut len);
+            let mut buf = Vec::from_elem(len as uint - 1, 0u8);     // subtract 1 to skip the trailing null character
+            gl::GetShaderInfoLog(shader, len, ptr::mut_null(), buf.as_mut_ptr() as *mut GLchar);
+            fail!("{}", str::from_utf8_owned(buf.move_iter().collect()));
+        }
+    }
+    shader
+}
+
+    fn link_program(vs: GLuint, fs: GLuint) -> GLuint {
+        let program = gl::CreateProgram();
+        gl::AttachShader(program, vs);
+        gl::AttachShader(program, fs);
+        gl::LinkProgram(program);
+        unsafe {
+            // Get the link status
+            let mut status = gl::FALSE as GLint;
+            gl::GetProgramiv(program, gl::LINK_STATUS, &mut status);
+
+            // Fail on error
+            if status != (gl::TRUE as GLint) {
+                let mut len: GLint = 0;
+                gl::GetProgramiv(program, gl::INFO_LOG_LENGTH, &mut len);
+                let mut buf = Vec::from_elem(len as uint - 1, 0u8);     // subtract 1 to skip the trailing null character
+                gl::GetProgramInfoLog(program, len, ptr::mut_null(), buf.as_mut_ptr() as *mut GLchar);
+                fail!(str::from_utf8_owned(buf.move_iter().collect()));
+            }
+        }
+        program
+    }
+
+}
+
+
+
+#[cfg(solely_opengles)]
+fn gl() -> Result<(), ~str> {
+    // Attempting to adapt
+    // http://stackoverflow.com/questions/21621054/
+    //  why-wont-this-simple-opengl-es-2-0-sdl-2-program-
+    //    let-me-change-my-point-sprite
+
+    try!(sdl::init([sdl::InitVideo]));
+    let (width, height) = (800, 600);
+
+    match vid::gl_load_library(None) {
+        Ok(()) => {},
+        Err(s) => {
+            println!("gl_load_library() failed: {}", s);
+            return Err(s)
+        }
+    }
+
+    let win = try!(
+        vid::Window::new("Hello World", 100, 100, width, height, [vid::Shown]));
+
+    let ctxt = try!(win.gl_create_context());
+    let ren = try!(rend::Renderer::from_window(
+        win, rend::DriverAuto, [rend::Accelerated, rend::TargetTexture]));
+
+    let vertex =
+        r"#version 100
+          precision mediump float;
+           void main()
+            {
+               gl_Position = vec4(0.0, 0.0, 0.0, 1.0);
+               gl_PointSize = 128.0;
+            }";
+    let fragment =
+        r"#version 100
+        precision mediump float;
+        void main()
+        {
+           gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+        }";
+
+    unsafe {
+        let programObject = gl::glCreateProgram();
+        loadShader(programObject, gl::VERTEX_SHADER, vertex);
+        loadShader(programObject, gl::FRAGMENT_SHADER, fragment);
+        gl::glLinkProgram(programObject);
+        gl::glUseProgram(programObject);
+    }
+
+    return Ok(());
+
+    fn loadShader(program: gl::GLuint, type_: gl::GLenum, shaderSrc: &str) {
+        unsafe {
+            let shader = gl::glCreateShader(type_);
+            shaderSrc.with_c_str(|src| {
+                gl::glShaderSource(shader, 1, &src, std::ptr::null());
+            });
+            gl::glCompileShader(shader);
+            gl::glAttachShader(program, shader);
+        }
+    }
+}
+
+#[cfg(exavolt_gist)]
+fn gl() -> Result<(), ~str> {
+    // Adapting from https://gist.github.com/exavolt/2360410
+
+    try!(sdl::init([sdl::InitVideo]));
+    let (width, height) = (800, 600);
+
+    match vid::gl_load_library(None) {
+        Ok(()) => {},
+        Err(s) => {
+            println!("gl_load_library() failed: {}", s);
+            return Err(s)
+        }
+    }
+
+    let win = try!(
+        vid::Window::new("Hello World", 100, 100, width, height, [vid::Shown]));
+
+    let ctxt = try!(win.gl_create_context());
+    let ren = try!(rend::Renderer::from_window(
+        win, rend::DriverAuto, [rend::Accelerated, rend::TargetTexture]));
+
+    initGL();
+    setViewport(width, height);
+    render();
+
+    sdl::timer::delay(2000);
+    return Ok(());
+
+    fn initGL() {
+        // gl::ShadeModel(gl::SMOOTH); // WTF
+
+        gl::load_with(vid::gl_get_proc_address);
+
+        unsafe {
+            gl::ClearColor(0.0, 0.0, 0.0, 0.0);
+            // gl::glClearDepthf(1.0); // Unsupported on mac?  Grr.
+            gl::Enable(gl::DEPTH_TEST);
+            gl::DepthFunc(gl::LEQUAL);
+            // gl2::glHint(gl2::PERSPECTIVE_CORRECTION_HINT, GL_NICEST); // WTF
+        }
+    }
+
+    fn setViewport(width: int, height: int) {
+        let height = if height == 0 { 1 } else { height };
+        let ratio = width as GLfloat / height as GLfloat;
+        unsafe {
+            gl::Viewport(0,0, width as GLsizei, height as GLsizei);
+            // gl::MatrixMode(gl::PROJECTION);
+            // gl::LoadIdentity
+            
+        }
+        
+        unimplemented!()
+    }
+
+    fn render() {
+        unimplemented!()
+    }
 }
 
 fn hello() -> Result<(), ~str> {
@@ -110,7 +432,7 @@ fn default() -> Result<(), ~str> {
                                              )
         .ok().expect("Failed to create Renderer from Window");
     println!("render_target_supported: {}", screen.render_target_supported());
-    let texture = screen.create_texture(pix::RGBA8888,
+    let _texture = screen.create_texture(pix::RGBA8888,
                                         rend::AccessTarget,
                                         width,
                                         height)
@@ -119,7 +441,7 @@ fn default() -> Result<(), ~str> {
     let purple = pix::RGB(128, 0, 128);
     let black = pix::RGB(0, 0, 0);
     if screen.render_target_supported() {
-        // screen.set_render_target(Some(&*texture));
+        // screen.set_render_target(Some(&*_texture));
     }
     screen.set_draw_color(black);
     screen.fill_rect(&Rect { x: 0, y: 0, w: width as i32, h: height as i32 });
