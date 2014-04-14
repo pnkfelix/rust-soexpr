@@ -215,11 +215,18 @@ static FS_SRC: &'static str =
         "triangle_color".with_c_str(|ptr| gl::GetUniformLocation(program, ptr))
     };
 
+    let loop_start_time = time::precise_time_s();
+
     loop {
         match evt::poll_event() {
             evt::QuitEvent(_) | evt::KeyUpEvent(_, _, key::EscapeKey, _, _)
                 => break,
-            _ => {}
+            _ => {
+                let time = time::precise_time_s();
+                if (time - loop_start_time) > 3.0 {
+                    break
+                }
+            }
         }
 
         // Use a uniform red
