@@ -215,6 +215,17 @@ static FS_SRC: &'static str =
         "triangle_color".with_c_str(|ptr| gl::GetUniformLocation(program, ptr))
     };
 
+    let elements : Vec<GLuint> = vec!(0, 1, 2);
+    let mut ebo = 0;
+    unsafe {
+        gl::GenBuffers(1, &mut ebo);
+        gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, ebo);
+        gl::BufferData(gl::ELEMENT_ARRAY_BUFFER,
+                       (elements.len() * mem::size_of::<GLuint>()) as GLsizeiptr,
+                       elements.as_ptr() as *GLvoid,
+                       gl::STATIC_DRAW);
+    }
+
     let loop_start_time = time::precise_time_s();
 
     loop {
@@ -239,7 +250,11 @@ static FS_SRC: &'static str =
         gl::Clear(gl::COLOR_BUFFER_BIT);
 
         // Draw a triangle from the 3 vertices
-        gl::DrawArrays(gl::TRIANGLES, 0, 3);
+        // gl::DrawArrays(gl::TRIANGLES, 0, 3);
+        unsafe {
+            gl::DrawElements(gl::TRIANGLES, 3, gl::UNSIGNED_INT, ptr::null());
+        }
+
         win.gl_swap_window();
     }
 
