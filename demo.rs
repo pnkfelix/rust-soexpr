@@ -141,26 +141,32 @@ fn gl() -> Result<(), ~str> {
 
 
 // Vertex data
-static VERTEX_DATA: [GLfloat, ..6] = [
-     0.0,  0.5,
-     0.5, -0.5,
-    -0.5, -0.5
+static VERTEX_DATA: [GLfloat, ..15] = [
+    // X     Y    R    G    B
+     0.0,  0.5, 1.0, 0.0, 0.0,
+     0.5, -0.5, 0.0, 1.0, 0.0,
+    -0.5, -0.5, 0.0, 0.0, 1.0,
 ];
 
 // Shader sources
 static VS_SRC: &'static str =
    "#version 150 core
     in vec2 position;
+    in vec3 color;
+
+    out vec3 v2f_color;
     void main() {
+       v2f_color = color;
        gl_Position = vec4(position, 0.0, 1.0);
     }";
 
 static FS_SRC: &'static str =
    "#version 150 core
-    uniform vec3 triangle_color;
+    in vec3 v2f_color;
+
     out vec4 out_color;
     void main() {
-       out_color = vec4(triangle_color, 1.0);
+       out_color = vec4(v2f_color, 1.0);
     }";
 
 
@@ -193,7 +199,16 @@ static FS_SRC: &'static str =
         let pos_attr = "position".with_c_str(|ptr| gl::GetAttribLocation(program, ptr));
         gl::EnableVertexAttribArray(pos_attr as GLuint);
         gl::VertexAttribPointer(pos_attr as GLuint, 2, gl::FLOAT,
-                                gl::FALSE as GLboolean, 0, ptr::null());
+                                gl::FALSE as GLboolean,
+                                5 * mem::size_of::<GLfloat>() as GLsizei,
+                                ptr::null());
+
+        let col_attr = "color".with_c_str(|ptr| gl::GetAttribLocation(program, ptr));
+        gl::EnableVertexAttribArray(col_attr as GLuint);
+        gl::VertexAttribPointer(col_attr as GLuint, 3, gl::FLOAT,
+                                gl::FALSE as GLboolean,
+                                5 * mem::size_of::<GLfloat>() as GLsizei,
+                                cast::transmute(2 * mem::size_of::<GLfloat>() as GLsizeiptr));
     }
 
     let uni_color = unsafe {
