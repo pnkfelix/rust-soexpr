@@ -147,17 +147,17 @@ static VERTEX_DATA: [GLfloat, ..6] = [
 
 // Shader sources
 static VS_SRC: &'static str =
-   "#version 150 core\n\
-    in vec2 position;\n\
-    void main() {\n\
-       gl_Position = vec4(position, 0.0, 1.0);\n\
+   "#version 150 core
+    in vec2 position;
+    void main() {
+       gl_Position = vec4(position, 0.0, 1.0);
     }";
 
 static FS_SRC: &'static str =
-   "#version 150 core\n\
-    out vec4 out_color;\n\
-    void main() {\n\
-       out_color = vec4(1.0, 1.0, 1.0, 1.0);\n\
+   "#version 150 core
+    out vec4 out_color;
+    void main() {
+       out_color = vec4(1.0, 1.0, 1.0, 1.0);
     }";
 
 
