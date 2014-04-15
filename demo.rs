@@ -141,11 +141,15 @@ fn gl() -> Result<(), ~str> {
 
 
 // Vertex data
-static VERTEX_DATA: [GLfloat, ..15] = [
+static VERTEX_DATA: [GLfloat, ..30] = [
     // X     Y    R    G    B
-     0.0,  0.5, 1.0, 0.0, 0.0,
-     0.5, -0.5, 0.0, 1.0, 0.0,
-    -0.5, -0.5, 0.0, 0.0, 1.0,
+    -0.5,  0.5, 1.0, 0.0, 0.0, // Top-left
+     0.5,  0.5, 0.0, 1.0, 0.0, // Top-right
+     0.5, -0.5, 0.0, 0.0, 1.0, // Bottom-right
+
+     0.5, -0.5, 0.0, 0.0, 1.0, // Bottom-right
+    -0.5, -0.5, 1.0, 1.0, 1.0, // Bottom-left
+    -0.5,  0.5, 1.0, 0.0, 0.0, // Top-left
 ];
 
 // Shader sources
@@ -249,11 +253,9 @@ static FS_SRC: &'static str =
         gl::ClearColor(0.3, 0.3, 0.3, 1.0);
         gl::Clear(gl::COLOR_BUFFER_BIT);
 
-        // Draw a triangle from the 3 vertices
-        // gl::DrawArrays(gl::TRIANGLES, 0, 3);
-        unsafe {
-            gl::DrawElements(gl::TRIANGLES, 3, gl::UNSIGNED_INT, ptr::null());
-        }
+        // Draw a rectangle from the 6 vertices
+        gl::DrawArrays(gl::TRIANGLES, 0, 6);
+        // unsafe { gl::DrawElements(gl::TRIANGLES, 3, gl::UNSIGNED_INT, ptr::null()); }
 
         win.gl_swap_window();
     }
