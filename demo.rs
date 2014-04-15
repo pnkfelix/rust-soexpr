@@ -141,15 +141,12 @@ fn gl() -> Result<(), ~str> {
 
 
 // Vertex data
-static VERTEX_DATA: [GLfloat, ..30] = [
+static VERTEX_DATA: [GLfloat, ..20] = [
     // X     Y    R    G    B
     -0.5,  0.5, 1.0, 0.0, 0.0, // Top-left
      0.5,  0.5, 0.0, 1.0, 0.0, // Top-right
      0.5, -0.5, 0.0, 0.0, 1.0, // Bottom-right
-
-     0.5, -0.5, 0.0, 0.0, 1.0, // Bottom-right
     -0.5, -0.5, 1.0, 1.0, 1.0, // Bottom-left
-    -0.5,  0.5, 1.0, 0.0, 0.0, // Top-left
 ];
 
 // Shader sources
@@ -219,7 +216,7 @@ static FS_SRC: &'static str =
         "triangle_color".with_c_str(|ptr| gl::GetUniformLocation(program, ptr))
     };
 
-    let elements : Vec<GLuint> = vec!(0, 1, 2);
+    let elements : Vec<GLuint> = vec!(0, 1, 2, 2, 3, 0);
     let mut ebo = 0;
     unsafe {
         gl::GenBuffers(1, &mut ebo);
@@ -254,8 +251,8 @@ static FS_SRC: &'static str =
         gl::Clear(gl::COLOR_BUFFER_BIT);
 
         // Draw a rectangle from the 6 vertices
-        gl::DrawArrays(gl::TRIANGLES, 0, 6);
-        // unsafe { gl::DrawElements(gl::TRIANGLES, 3, gl::UNSIGNED_INT, ptr::null()); }
+        // gl::DrawArrays(gl::TRIANGLES, 0, 6);
+        unsafe { gl::DrawElements(gl::TRIANGLES, 6, gl::UNSIGNED_INT, ptr::null()); }
 
         win.gl_swap_window();
     }
