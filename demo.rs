@@ -154,20 +154,27 @@ static VS_SRC: &'static str =
    "#version 150 core
     in vec2 position;
     in vec3 color;
+    in vec2 texcoord;
 
     out vec3 v2f_color;
+    out vec2 v2f_texcoord;
     void main() {
        v2f_color = color;
+       v2f_texcoord = texcoord;
        gl_Position = vec4(position, 0.0, 1.0);
     }";
 
 static FS_SRC: &'static str =
    "#version 150 core
     in vec3 v2f_color;
+    in vec2 v2f_texcoord;
 
     out vec4 out_color;
+
+    uniform sampler2D tex;
+
     void main() {
-       out_color = vec4(v2f_color, 1.0);
+       out_color = texture(tex, v2f_texcoord) * vec4(v2f_color, 1.0);
     }";
 
 
@@ -210,11 +217,41 @@ static FS_SRC: &'static str =
                                 gl::FALSE as GLboolean,
                                 7 * mem::size_of::<GLfloat>() as GLsizei,
                                 cast::transmute(2 * mem::size_of::<GLfloat>() as GLsizeiptr));
+
+        let tex_attr = "texcoord".with_c_str(|ptr| gl::GetAttribLocation(program, ptr));
+        gl::EnableVertexAttribArray(tex_attr as GLuint);
+        gl::VertexAttribPointer(tex_attr as GLuint, 2, gl::FLOAT,
+                                gl::FALSE as GLboolean,
+                                7 * mem::size_of::<GLfloat>() as GLsizei,
+                                cast::transmute(5 * mem::size_of::<GLfloat>() as GLsizeiptr));
     }
 
     let uni_color = unsafe {
         "triangle_color".with_c_str(|ptr| gl::GetUniformLocation(program, ptr))
     };
+
+    let mut tex = 0;
+    unsafe { gl::GenTextures(1, &mut tex); }
+
+    let image = try!(surf::Surface::from_bmp(&Path::new("sample.bmp")));
+    let (width, height) = (image.get_width(), image.get_height());
+    image.with_lock(|pixels| {
+        unsafe {
+            gl::TexImage2D(gl::TEXTURE_2D, 0, gl::RGB as i32,
+                           width as i32, height as i32,
+                           0,
+                           // gl::RGBA,
+                           gl::BGRA,
+                           gl::UNSIGNED_BYTE,
+                           pixels.as_ptr() as *GLvoid);
+        }
+    });
+
+    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
+    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
+    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as GLint);
+    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as GLint);
+
 
     let elements : Vec<GLuint> = vec!(0, 1, 2, 2, 3, 0);
     let mut ebo = 0;
