@@ -9,6 +9,8 @@ extern crate sdl = "sdl2";
 
 extern crate opengles;
 
+extern crate cgmath;
+
 extern crate gl;
 
 extern crate time;
@@ -21,6 +23,13 @@ use std::str;
 use std::vec;
 
 use gl::types::*;
+
+use ang = cgmath::angle;
+use cgmath::angle::{ToRad};
+use mat = cgmath::matrix;
+use cgmath::matrix::{ToMatrix4, Matrix};
+use vec = cgmath::vector;
+
 
 use evt = sdl::event;
 use vid = sdl::video;
@@ -158,10 +167,13 @@ static VS_SRC: &'static str =
 
     out vec3 v2f_color;
     out vec2 v2f_texcoord;
+
+    uniform mat4 trans;
+
     void main() {
        v2f_color = color;
        v2f_texcoord = texcoord;
-       gl_Position = vec4(position, 0.0, 1.0);
+       gl_Position = trans * vec4(position, 0.0, 1.0);
     }";
 
 static FS_SRC: &'static str =
@@ -234,6 +246,16 @@ static FS_SRC: &'static str =
     let uni_color = unsafe {
         "triangle_color".with_c_str(|ptr| gl::GetUniformLocation(program, ptr))
     };
+
+    let trans = mat::Matrix4::<f32>::identity();
+    let trans = trans * mat::Matrix3::from_angle_z(ang::deg(180.0f32).to_rad()).to_matrix4();
+    // let result = trans.mul_v(&Vector4::new(1.0, 0.0, 0.0, 1.0));
+    // println!("{:f}, {:f}, {:f}", result.x, result.y, result.z);
+    unsafe {
+        let uni_trans = 
+            "trans".with_c_str(|ptr| gl::GetUniformLocation(program, ptr));
+        gl::UniformMatrix4fv(uni_trans, 1, gl::FALSE, cast::transmute(&trans));
+    }
 
     let mut textures = vec!(0, 0);
     unsafe { gl::GenTextures(2, textures.as_mut_ptr()); }
