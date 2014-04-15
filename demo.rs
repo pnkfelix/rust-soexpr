@@ -171,10 +171,15 @@ static FS_SRC: &'static str =
 
     out vec4 out_color;
 
-    uniform sampler2D tex;
+    uniform sampler2D texKitten;
+    uniform sampler2D texPuppy;
 
     void main() {
-       out_color = texture(tex, v2f_texcoord) * vec4(v2f_color, 1.0);
+       vec4 colKitten = texture(texKitten, v2f_texcoord);
+       vec4 colPuppy  = texture(texPuppy, v2f_texcoord);
+       // out_color = mix(colKitten, colPuppy, 0.5) * vec4(v2f_color, 1.0);
+       // out_color = colKitten * vec4(v2f_color, 1.0);
+       out_color = mix(colKitten, colPuppy, 0.5);
     }";
 
 
@@ -230,9 +235,11 @@ static FS_SRC: &'static str =
         "triangle_color".with_c_str(|ptr| gl::GetUniformLocation(program, ptr))
     };
 
-    let mut tex = 0;
-    unsafe { gl::GenTextures(1, &mut tex); }
+    let mut textures = vec!(0, 0);
+    unsafe { gl::GenTextures(2, textures.as_mut_ptr()); }
 
+    gl::ActiveTexture(gl::TEXTURE0);
+    gl::BindTexture(gl::TEXTURE_2D, *textures.get(0));
     let image = try!(surf::Surface::from_bmp(&Path::new("sample.bmp")));
     let (width, height) = (image.get_width(), image.get_height());
     image.with_lock(|pixels| {
@@ -246,6 +253,31 @@ static FS_SRC: &'static str =
                            pixels.as_ptr() as *GLvoid);
         }
     });
+    unsafe { "texKitten".with_c_str(|ptr| gl::Uniform1i(gl::GetUniformLocation(program, ptr), 0)) };
+
+
+    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
+    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
+    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as GLint);
+    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as GLint);
+
+
+    gl::ActiveTexture(gl::TEXTURE1);
+    gl::BindTexture(gl::TEXTURE_2D, *textures.get(1));
+    let image = try!(surf::Surface::from_bmp(&Path::new("sample2.bmp")));
+    let (width, height) = (image.get_width(), image.get_height());
+    image.with_lock(|pixels| {
+        unsafe {
+            gl::TexImage2D(gl::TEXTURE_2D, 0, gl::RGB as i32,
+                           width as i32, height as i32,
+                           0,
+                           // gl::RGBA,
+                           gl::BGRA,
+                           gl::UNSIGNED_BYTE,
+                           pixels.as_ptr() as *GLvoid);
+        }
+    });
+    unsafe { "texPuppy".with_c_str(|ptr| gl::Uniform1i(gl::GetUniformLocation(program, ptr), 1)) };
 
     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
