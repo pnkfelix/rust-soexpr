@@ -141,12 +141,12 @@ fn gl() -> Result<(), ~str> {
 
 
 // Vertex data
-static VERTEX_DATA: [GLfloat, ..20] = [
-    // X     Y    R    G    B
-    -0.5,  0.5, 1.0, 0.0, 0.0, // Top-left
-     0.5,  0.5, 0.0, 1.0, 0.0, // Top-right
-     0.5, -0.5, 0.0, 0.0, 1.0, // Bottom-right
-    -0.5, -0.5, 1.0, 1.0, 1.0, // Bottom-left
+static VERTEX_DATA: [GLfloat, ..28] = [
+    // X     Y    R    G    B  Tecoords
+    -0.5,  0.5, 1.0, 0.0, 0.0, 0.0, 0.0, // Top-left
+     0.5,  0.5, 0.0, 1.0, 0.0, 1.0, 0.0, // Top-right
+     0.5, -0.5, 0.0, 0.0, 1.0, 1.0, 1.0, // Bottom-right
+    -0.5, -0.5, 1.0, 1.0, 1.0, 0.0, 1.0  // Bottom-left
 ];
 
 // Shader sources
@@ -201,14 +201,14 @@ static FS_SRC: &'static str =
         gl::EnableVertexAttribArray(pos_attr as GLuint);
         gl::VertexAttribPointer(pos_attr as GLuint, 2, gl::FLOAT,
                                 gl::FALSE as GLboolean,
-                                5 * mem::size_of::<GLfloat>() as GLsizei,
+                                7 * mem::size_of::<GLfloat>() as GLsizei,
                                 ptr::null());
 
         let col_attr = "color".with_c_str(|ptr| gl::GetAttribLocation(program, ptr));
         gl::EnableVertexAttribArray(col_attr as GLuint);
         gl::VertexAttribPointer(col_attr as GLuint, 3, gl::FLOAT,
                                 gl::FALSE as GLboolean,
-                                5 * mem::size_of::<GLfloat>() as GLsizei,
+                                7 * mem::size_of::<GLfloat>() as GLsizei,
                                 cast::transmute(2 * mem::size_of::<GLfloat>() as GLsizeiptr));
     }
 
