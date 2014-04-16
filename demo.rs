@@ -247,16 +247,6 @@ static FS_SRC: &'static str =
         "triangle_color".with_c_str(|ptr| gl::GetUniformLocation(program, ptr))
     };
 
-    let trans = mat::Matrix4::<f32>::identity();
-    let trans = trans * mat::Matrix3::from_angle_z(ang::deg(180.0f32).to_rad()).to_matrix4();
-    // let result = trans.mul_v(&Vector4::new(1.0, 0.0, 0.0, 1.0));
-    // println!("{:f}, {:f}, {:f}", result.x, result.y, result.z);
-    unsafe {
-        let uni_trans = 
-            "trans".with_c_str(|ptr| gl::GetUniformLocation(program, ptr));
-        gl::UniformMatrix4fv(uni_trans, 1, gl::FALSE, cast::transmute(&trans));
-    }
-
     let mut textures = vec!(0, 0);
     unsafe { gl::GenTextures(2, textures.as_mut_ptr()); }
 
@@ -340,6 +330,26 @@ static FS_SRC: &'static str =
 
         gl::ClearColor(0.3, 0.3, 0.3, 1.0);
         gl::Clear(gl::COLOR_BUFFER_BIT);
+
+        let trans = mat::Matrix4::<f32>::identity();
+
+        // (Apparently `*` on Matrix4 does not multiply the same way
+        // that `mul_m` does.  It seems like it delegates to `mul_v`,
+        // which does a dot-product against a vector, using each
+        // column of the rhs as the vector to use in the dot-product.
+        // At least, that's my current understanding.  It is a
+        // somewhat strange design choice here.)
+        //
+        // Anyway, using `mul_m` fixes the issue for me.
+        let trans = trans.mul_m(&mat::Matrix3::from_angle_z(ang::deg(time as f32 * 180.0f32).to_rad()).to_matrix4());
+        // let result = trans.mul_v(&Vector4::new(1.0, 0.0, 0.0, 1.0));
+        // println!("{:f}, {:f}, {:f}", result.x, result.y, result.z);
+        unsafe {
+            let uni_trans = 
+                "trans".with_c_str(|ptr| gl::GetUniformLocation(program, ptr));
+            gl::UniformMatrix4fv(uni_trans, 1, gl::FALSE, cast::transmute(&trans));
+        }
+
 
         // Draw a rectangle from the 6 vertices
         // gl::DrawArrays(gl::TRIANGLES, 0, 6);
