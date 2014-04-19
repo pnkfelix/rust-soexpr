@@ -88,6 +88,59 @@ mod tests {
 //    pub mod soe;
 }
 
+struct VertexBuffers {
+    len: i32,
+    names: ~[u32],
+}
+
+enum BufferDataUsage {
+    StreamDraw = gl::STREAM_DRAW,
+    StreamRead = gl::STREAM_READ,
+    StreamCopy = gl::STREAM_COPY,
+    StaticDraw = gl::STATIC_DRAW,
+    StaticRead = gl::STATIC_READ,
+    StaticCopy = gl::STATIC_COPY,
+    DynamicDraw = gl::DYNAMIC_DRAW,
+    DynamicRead = gl::DYNAMIC_READ,
+    DynamicCopy = gl::DYNAMIC_COPY,
+}
+
+impl VertexBuffers {
+    fn new(len: u32) -> VertexBuffers {
+        use std::slice;
+        let len = len as i32;
+        assert!(len > 0);
+        let mut names = slice::from_elem(len as uint, 0u32);
+        unsafe { gl::GenBuffers(len, &mut names[0]); }
+        println!("names: {}", names);
+        VertexBuffers { len: len, names: names }
+    }
+
+    fn bind_array(&mut self, idx: u32) {
+        gl::BindBuffer(gl::ARRAY_BUFFER, self.names[idx])
+    }
+
+    fn bind_and_init_array<T>(&mut self,
+                              idx: u32,
+                              init: &[T],
+                              usage: BufferDataUsage) {
+        self.bind_array(idx);
+        unsafe {
+            gl::BufferData(gl::ARRAY_BUFFER,
+                           (init.len() * mem::size_of::<T>()) as GLsizeiptr,
+                           cast::transmute(&init[0]),
+                           usage as GLenum);
+        }
+    }
+}
+
+impl Drop for VertexBuffers {
+    fn drop(&mut self) {
+        unsafe { gl::DeleteBuffers(self.len, self.names.as_ptr()); }
+    }
+}
+
+
 fn perspective<V:Primitive+Zero+One+Float+ApproxEq<V>+Mul<V,V>+PartOrdFloat<V>>(
     fovy: ang::Rad<V>, aspect: V, zNear: V, zFar: V) -> mat::Matrix4<V>
 {
@@ -233,7 +286,7 @@ static FS_SRC: &'static str =
     let program1 = link_program(vs, fs);
 
     let mut vao = 0;
-    let mut vbo = 0;
+    let mut vbo;
 
     unsafe {
         // Create Vertex Array Object
@@ -241,12 +294,8 @@ static FS_SRC: &'static str =
         gl::BindVertexArray(vao);
 
         // Create a Vertex Buffer Object and copy the vertex data to it
-        gl::GenBuffers(1, &mut vbo);
-        gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
-        gl::BufferData(gl::ARRAY_BUFFER,
-                       (VERTEX_DATA.len() * mem::size_of::<GLfloat>()) as GLsizeiptr,
-                       cast::transmute(&VERTEX_DATA[0]),
-                       gl::STATIC_DRAW);
+        vbo = VertexBuffers::new(1);
+        vbo.bind_and_init_array(0, VERTEX_DATA, StaticDraw);
 
         // Use shader program
         gl::UseProgram(program1);
