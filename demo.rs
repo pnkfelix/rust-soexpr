@@ -21,15 +21,19 @@ use std::os;
 use std::ptr;
 use std::str;
 use std::vec;
+use std::num::{Zero,One,Float};
 
 use gl::types::*;
 
 use ang = cgmath::angle;
-use cgmath::angle::{ToRad};
+use cgmath::angle::{ToRad,Angle};
 use mat = cgmath::matrix;
 use cgmath::matrix::{ToMatrix4, Matrix};
 use vec = cgmath::vector;
-
+use cgmath::vector::{Vector,EuclideanVector};
+use pt = cgmath::point;
+use cgmath::partial_ord::PartOrdFloat;
+use cgmath::approx::ApproxEq;
 
 use evt = sdl::event;
 use vid = sdl::video;
@@ -82,6 +86,62 @@ fn dispatch(driver: &str, variant: &str, _args: &[~str]) {
 mod tests {
 //    pub mod testsprite;
 //    pub mod soe;
+}
+
+fn look_at<V:Primitive+Zero+One+Float+ApproxEq<V>+Mul<V,V>+PartOrdFloat<V>>(
+    eye: vec::Vector3<V>, center: vec::Vector3<V>, up: vec::Vector3<V>)
+    -> mat::Matrix4<V>
+    
+{
+    let zer : V = Zero::zero();
+    let one = One::one();
+
+    let f = (center - eye).normalize();
+    let s = (f.cross(&up)).normalize();
+    let u = s.cross(&f);
+
+    let mut result = mat::Matrix4::zero();
+    *result.mut_cr(0,0) = s.x;
+    *result.mut_cr(1,0) = s.y;
+    *result.mut_cr(2,0) = s.z;
+    *result.mut_cr(0,1) = u.x;
+    *result.mut_cr(1,1) = u.y;
+    *result.mut_cr(2,1) = u.z;
+    *result.mut_cr(0,2) = f.x;
+    *result.mut_cr(1,2) = f.y;
+    *result.mut_cr(2,2) = f.z;
+    *result.mut_cr(3,0) = s.dot(&eye);
+    *result.mut_cr(3,1) = u.dot(&eye);
+    *result.mut_cr(3,2) = f.dot(&eye);
+
+    *result.mut_cr(0,3) = one;
+    *result.mut_cr(1,3) = one;
+    *result.mut_cr(2,3) = one;
+    *result.mut_cr(3,3) = one;
+
+    return result;
+}
+
+
+fn perspective<V:Primitive+Zero+One+Float+ApproxEq<V>+Mul<V,V>+PartOrdFloat<V>>(
+    fovy: ang::Rad<V>, aspect: V, zNear: V, zFar: V) -> mat::Matrix4<V>
+{
+    let one : V = One::one();
+    let two : V = one + one;
+
+    assert!(aspect != Zero::zero());
+    assert!(zFar != zNear);
+
+    let rad = fovy;
+    let tanHalfFovy = ang::rad(rad.div_s(two).s.tan());
+
+    let mut result = mat::Matrix4::zero();
+    *result.mut_cr(0,0) = one / (aspect * tanHalfFovy.s);
+    *result.mut_cr(1,1) = one / (tanHalfFovy.s);
+    *result.mut_cr(2,2) = - (zFar + zNear) / (zFar - zNear);
+    *result.mut_cr(2,3) = - one;
+    *result.mut_cr(3,2) = - (two * zFar * zNear) / (zFar - zNear);
+    return result;
 }
 
 fn gl() -> Result<(), ~str> {
@@ -168,12 +228,14 @@ static VS_SRC: &'static str =
     out vec3 v2f_color;
     out vec2 v2f_texcoord;
 
-    uniform mat4 trans;
+    uniform mat4 model;
+    uniform mat4 view;
+    uniform mat4 proj;
 
     void main() {
        v2f_color = color;
        v2f_texcoord = texcoord;
-       gl_Position = trans * vec4(position, 0.0, 1.0);
+       gl_Position = model * vec4(position, 0.0, 1.0);
     }";
 
 static FS_SRC: &'static str =
@@ -316,7 +378,7 @@ static FS_SRC: &'static str =
                 => break,
             _ => {
                 let time = time::precise_time_s();
-                if (time - loop_start_time) > 3.0 {
+                if (time - loop_start_time) > 5.0 {
                     break
                 }
             }
@@ -333,6 +395,9 @@ static FS_SRC: &'static str =
 
         let trans = mat::Matrix4::<f32>::identity();
 
+        let rot = &mat::Matrix3::from_angle_z(ang::deg(time as f32 * 180.0f32)
+                                              .to_rad())
+            .to_matrix4();
         // (Apparently `*` on Matrix4 does not multiply the same way
         // that `mul_m` does.  It seems like it delegates to `mul_v`,
         // which does a dot-product against a vector, using each
@@ -341,15 +406,39 @@ static FS_SRC: &'static str =
         // somewhat strange design choice here.)
         //
         // Anyway, using `mul_m` fixes the issue for me.
-        let trans = trans.mul_m(&mat::Matrix3::from_angle_z(ang::deg(time as f32 * 180.0f32).to_rad()).to_matrix4());
+        let trans = trans.mul_m(rot);
         // let result = trans.mul_v(&Vector4::new(1.0, 0.0, 0.0, 1.0));
         // println!("{:f}, {:f}, {:f}", result.x, result.y, result.z);
         unsafe {
             let uni_trans = 
-                "trans".with_c_str(|ptr| gl::GetUniformLocation(program, ptr));
+                "model".with_c_str(|ptr| gl::GetUniformLocation(program, ptr));
             gl::UniformMatrix4fv(uni_trans, 1, gl::FALSE, cast::transmute(&trans));
         }
 
+/*
+        let view = mat::Matrix4::look_at(&pt::Point3::new(1.2, 1.2, 1.2),
+                                         &pt::Point3::new(0.0, 0.0, 0.0),
+                                         &vec::Vector3::new(0.0, 0.0, 1.0));
+        let view = look_at(vec::Vector3::new(1.2, 1.2, 1.2),
+                           vec::Vector3::new(0.0, 0.0, 0.0),
+                           vec::Vector3::new(0.0, 0.0, 1.0));
+*/
+        let view = mat::Matrix4::<f32>::identity();
+        unsafe {
+            let uni_view =
+                "view".with_c_str(|ptr| gl::GetUniformLocation(program, ptr));
+            gl::UniformMatrix4fv(uni_view, 1, gl::FALSE, cast::transmute(&view));
+        }
+
+        let proj = perspective(ang::deg(45.0).to_rad(),
+                               800.0 / 600.0,
+                               1.0,
+                               10.0);
+        unsafe {
+            let uni_proj =
+                "proj".with_c_str(|ptr| gl::GetUniformLocation(program, ptr));
+            gl::UniformMatrix4fv(uni_proj, 1, gl::FALSE, cast::transmute(&proj));
+        }
 
         // Draw a rectangle from the 6 vertices
         // gl::DrawArrays(gl::TRIANGLES, 0, 6);
