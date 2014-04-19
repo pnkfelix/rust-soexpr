@@ -19,6 +19,7 @@ use std::cast;
 use std::mem;
 use std::os;
 use std::ptr;
+use std::slice;
 use std::str;
 use std::vec;
 use std::num::{Zero,One,Float};
@@ -88,9 +89,36 @@ mod tests {
 //    pub mod soe;
 }
 
+struct VertexArrays {
+    len: GLsizei,
+    names: ~[GLuint],
+}
+
+impl VertexArrays {
+    fn new(len: u32) -> VertexArrays {
+        let len = len as GLsizei;
+        assert!(len > 0);
+        let mut names = slice::from_elem(len as uint, 0u32);
+        unsafe { gl::GenVertexArrays(len, &mut names[0]) }
+        VertexArrays { len: len, names: names }
+    }
+
+    fn bind(&mut self, idx: u32) {
+        gl::BindVertexArray(self.names[idx]);
+    }
+}
+
+impl Drop for VertexArrays {
+    fn drop(&mut self) {
+        unsafe {
+            gl::DeleteVertexArrays(self.len, self.names.as_ptr());
+        }
+    }
+}
+
 struct VertexBuffers {
-    len: i32,
-    names: ~[u32],
+    len: GLsizei,
+    names: ~[GLuint],
 }
 
 enum BufferDataUsage {
@@ -107,12 +135,10 @@ enum BufferDataUsage {
 
 impl VertexBuffers {
     fn new(len: u32) -> VertexBuffers {
-        use std::slice;
-        let len = len as i32;
+        let len = len as GLsizei;
         assert!(len > 0);
         let mut names = slice::from_elem(len as uint, 0u32);
         unsafe { gl::GenBuffers(len, &mut names[0]); }
-        println!("names: {}", names);
         VertexBuffers { len: len, names: names }
     }
 
@@ -285,13 +311,13 @@ static FS_SRC: &'static str =
     let fs = compile_shader(FS_SRC, gl::FRAGMENT_SHADER);
     let program1 = link_program(vs, fs);
 
-    let mut vao = 0;
+    let mut vao;
     let mut vbo;
 
     unsafe {
         // Create Vertex Array Object
-        gl::GenVertexArrays(1, &mut vao);
-        gl::BindVertexArray(vao);
+        vao = VertexArrays::new(1);
+        vao.bind(0);
 
         // Create a Vertex Buffer Object and copy the vertex data to it
         vbo = VertexBuffers::new(1);
