@@ -225,7 +225,7 @@ static FS_SRC: &'static str =
     // Create GLSL shaders
     let vs = compile_shader(VS_SRC, gl::VERTEX_SHADER);
     let fs = compile_shader(FS_SRC, gl::FRAGMENT_SHADER);
-    let program = link_program(vs, fs);
+    let program1 = link_program(vs, fs);
 
     let mut vao = 0;
     let mut vbo = 0;
@@ -244,25 +244,25 @@ static FS_SRC: &'static str =
                        gl::STATIC_DRAW);
 
         // Use shader program
-        gl::UseProgram(program);
-        "out_color".with_c_str(|ptr| gl::BindFragDataLocation(program, 0, ptr));
+        gl::UseProgram(program1);
+        "out_color".with_c_str(|ptr| gl::BindFragDataLocation(program1, 0, ptr));
 
         // Specify the layout of the vertex data
-        let pos_attr = "position".with_c_str(|ptr| gl::GetAttribLocation(program, ptr));
+        let pos_attr = "position".with_c_str(|ptr| gl::GetAttribLocation(program1, ptr));
         gl::EnableVertexAttribArray(pos_attr as GLuint);
         gl::VertexAttribPointer(pos_attr as GLuint, 2, gl::FLOAT,
                                 gl::FALSE as GLboolean,
                                 7 * mem::size_of::<GLfloat>() as GLsizei,
                                 ptr::null());
 
-        let col_attr = "color".with_c_str(|ptr| gl::GetAttribLocation(program, ptr));
+        let col_attr = "color".with_c_str(|ptr| gl::GetAttribLocation(program1, ptr));
         gl::EnableVertexAttribArray(col_attr as GLuint);
         gl::VertexAttribPointer(col_attr as GLuint, 3, gl::FLOAT,
                                 gl::FALSE as GLboolean,
                                 7 * mem::size_of::<GLfloat>() as GLsizei,
                                 cast::transmute(2 * mem::size_of::<GLfloat>() as GLsizeiptr));
 
-        let tex_attr = "texcoord".with_c_str(|ptr| gl::GetAttribLocation(program, ptr));
+        let tex_attr = "texcoord".with_c_str(|ptr| gl::GetAttribLocation(program1, ptr));
         gl::EnableVertexAttribArray(tex_attr as GLuint);
         gl::VertexAttribPointer(tex_attr as GLuint, 2, gl::FLOAT,
                                 gl::FALSE as GLboolean,
@@ -271,7 +271,7 @@ static FS_SRC: &'static str =
     }
 
     let uni_color = unsafe {
-        "triangle_color".with_c_str(|ptr| gl::GetUniformLocation(program, ptr))
+        "triangle_color".with_c_str(|ptr| gl::GetUniformLocation(program1, ptr))
     };
 
     let mut textures = vec!(0, 0);
@@ -292,7 +292,7 @@ static FS_SRC: &'static str =
                            pixels.as_ptr() as *GLvoid);
         }
     });
-    unsafe { "texKitten".with_c_str(|ptr| gl::Uniform1i(gl::GetUniformLocation(program, ptr), 0)) };
+    unsafe { "texKitten".with_c_str(|ptr| gl::Uniform1i(gl::GetUniformLocation(program1, ptr), 0)) };
 
 
     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
@@ -316,7 +316,7 @@ static FS_SRC: &'static str =
                            pixels.as_ptr() as *GLvoid);
         }
     });
-    unsafe { "texPuppy".with_c_str(|ptr| gl::Uniform1i(gl::GetUniformLocation(program, ptr), 1)) };
+    unsafe { "texPuppy".with_c_str(|ptr| gl::Uniform1i(gl::GetUniformLocation(program1, ptr), 1)) };
 
     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
@@ -376,14 +376,14 @@ static FS_SRC: &'static str =
         // println!("{:f}, {:f}, {:f}", result.x, result.y, result.z);
         unsafe {
             let uni_trans = 
-                "model".with_c_str(|ptr| gl::GetUniformLocation(program, ptr));
+                "model".with_c_str(|ptr| gl::GetUniformLocation(program1, ptr));
             gl::UniformMatrix4fv(uni_trans, 1, gl::FALSE, cast::transmute(&trans));
         }
 
         let view = mat::Matrix4::<f32>::identity();
         unsafe {
             let uni_view =
-                "view".with_c_str(|ptr| gl::GetUniformLocation(program, ptr));
+                "view".with_c_str(|ptr| gl::GetUniformLocation(program1, ptr));
             gl::UniformMatrix4fv(uni_view, 1, gl::FALSE, cast::transmute(&view));
         }
 
@@ -393,7 +393,7 @@ static FS_SRC: &'static str =
                                10.0);
         unsafe {
             let uni_proj =
-                "proj".with_c_str(|ptr| gl::GetUniformLocation(program, ptr));
+                "proj".with_c_str(|ptr| gl::GetUniformLocation(program1, ptr));
             gl::UniformMatrix4fv(uni_proj, 1, gl::FALSE, cast::transmute(&proj));
         }
 
