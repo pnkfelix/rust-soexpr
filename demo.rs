@@ -88,41 +88,6 @@ mod tests {
 //    pub mod soe;
 }
 
-fn look_at<V:Primitive+Zero+One+Float+ApproxEq<V>+Mul<V,V>+PartOrdFloat<V>>(
-    eye: vec::Vector3<V>, center: vec::Vector3<V>, up: vec::Vector3<V>)
-    -> mat::Matrix4<V>
-    
-{
-    let zer : V = Zero::zero();
-    let one = One::one();
-
-    let f = (center - eye).normalize();
-    let s = (f.cross(&up)).normalize();
-    let u = s.cross(&f);
-
-    let mut result = mat::Matrix4::zero();
-    *result.mut_cr(0,0) = s.x;
-    *result.mut_cr(1,0) = s.y;
-    *result.mut_cr(2,0) = s.z;
-    *result.mut_cr(0,1) = u.x;
-    *result.mut_cr(1,1) = u.y;
-    *result.mut_cr(2,1) = u.z;
-    *result.mut_cr(0,2) = f.x;
-    *result.mut_cr(1,2) = f.y;
-    *result.mut_cr(2,2) = f.z;
-    *result.mut_cr(3,0) = s.dot(&eye);
-    *result.mut_cr(3,1) = u.dot(&eye);
-    *result.mut_cr(3,2) = f.dot(&eye);
-
-    *result.mut_cr(0,3) = one;
-    *result.mut_cr(1,3) = one;
-    *result.mut_cr(2,3) = one;
-    *result.mut_cr(3,3) = one;
-
-    return result;
-}
-
-
 fn perspective<V:Primitive+Zero+One+Float+ApproxEq<V>+Mul<V,V>+PartOrdFloat<V>>(
     fovy: ang::Rad<V>, aspect: V, zNear: V, zFar: V) -> mat::Matrix4<V>
 {
@@ -415,14 +380,6 @@ static FS_SRC: &'static str =
             gl::UniformMatrix4fv(uni_trans, 1, gl::FALSE, cast::transmute(&trans));
         }
 
-/*
-        let view = mat::Matrix4::look_at(&pt::Point3::new(1.2, 1.2, 1.2),
-                                         &pt::Point3::new(0.0, 0.0, 0.0),
-                                         &vec::Vector3::new(0.0, 0.0, 1.0));
-        let view = look_at(vec::Vector3::new(1.2, 1.2, 1.2),
-                           vec::Vector3::new(0.0, 0.0, 0.0),
-                           vec::Vector3::new(0.0, 0.0, 1.0));
-*/
         let view = mat::Matrix4::<f32>::identity();
         unsafe {
             let uni_view =
