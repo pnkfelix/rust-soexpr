@@ -175,12 +175,17 @@ fn gl() -> Result<(), ~str> {
 
 
 // Vertex data
-static VERTEX_DATA: [GLfloat, ..28] = [
-    // X     Y    R    G    B  Tecoords
-    -0.5,  0.5, 1.0, 0.0, 0.0, 0.0, 0.0, // Top-left
-     0.5,  0.5, 0.0, 1.0, 0.0, 1.0, 0.0, // Top-right
-     0.5, -0.5, 0.0, 0.0, 1.0, 1.0, 1.0, // Bottom-right
-    -0.5, -0.5, 1.0, 1.0, 1.0, 0.0, 1.0  // Bottom-left
+static VERTEX_DATA: [GLfloat, ..56] = [
+    // X     Y    R    G    B  Texcoords
+    -1.0,  0.5, 1.0, 0.0, 0.0, 0.0, 0.0, // Top-left
+     0.0,  0.5, 0.0, 1.0, 0.0, 1.0, 0.0, // Top-right
+     0.0, -0.5, 0.0, 0.0, 1.0, 1.0, 1.0, // Bottom-right
+    -1.0, -0.5, 1.0, 1.0, 1.0, 0.0, 1.0, // Bottom-left
+
+     0.5,  0.5, 1.0, 0.0, 0.0, 0.0, 0.0, // Top-left
+     1.5,  0.5, 0.0, 1.0, 0.0, 1.0, 0.0, // Top-right
+     1.5, -0.5, 0.0, 0.0, 1.0, 1.0, 1.0, // Bottom-right
+     0.5, -0.5, 1.0, 1.0, 1.0, 0.0, 1.0, // Bottom-left
 ];
 
 // Shader sources
@@ -324,7 +329,8 @@ static FS_SRC: &'static str =
     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as GLint);
 
 
-    let elements : Vec<GLuint> = vec!(0, 1, 2, 2, 3, 0);
+    let elements : Vec<GLuint> = vec!(4, 5, 6, 6, 7, 4,
+                                      0, 1, 2, 2, 3, 0);
     let mut ebo = 0;
     unsafe {
         gl::GenBuffers(1, &mut ebo);
@@ -399,7 +405,7 @@ static FS_SRC: &'static str =
 
         // Draw a rectangle from the 6 vertices
         // gl::DrawArrays(gl::TRIANGLES, 0, 6);
-        unsafe { gl::DrawElements(gl::TRIANGLES, 6, gl::UNSIGNED_INT, ptr::null()); }
+        unsafe { gl::DrawElements(gl::TRIANGLES, 12, gl::UNSIGNED_INT, ptr::null()); }
 
         win.gl_swap_window();
     }
