@@ -177,15 +177,15 @@ fn gl() -> Result<(), ~str> {
 // Vertex data
 static VERTEX_DATA: [GLfloat, ..56] = [
     // X     Y    R    G    B  Texcoords
-    -1.0,  0.5, 1.0, 0.0, 0.0, 0.0, 0.0, // Top-left
-     0.0,  0.5, 0.0, 1.0, 0.0, 1.0, 0.0, // Top-right
-     0.0, -0.5, 0.0, 0.0, 1.0, 1.0, 1.0, // Bottom-right
-    -1.0, -0.5, 1.0, 1.0, 1.0, 0.0, 1.0, // Bottom-left
+    -1.0,  0.5, 0.5, 0.5, 0.5, 0.0, 0.0, // Top-left
+     0.0,  0.5, 1.0, 0.0, 0.0, 1.0, 0.0, // Top-right
+     0.0, -0.5, 0.0, 1.0, 0.0, 1.0, 1.0, // Bottom-right
+    -1.0, -0.5, 0.0, 0.0, 1.0, 0.0, 1.0, // Bottom-left
 
-     0.5,  0.5, 1.0, 0.0, 0.0, 0.0, 0.0, // Top-left
-     1.5,  0.5, 0.0, 1.0, 0.0, 1.0, 0.0, // Top-right
-     1.5, -0.5, 0.0, 0.0, 1.0, 1.0, 1.0, // Bottom-right
-     0.5, -0.5, 1.0, 1.0, 1.0, 0.0, 1.0, // Bottom-left
+     0.5,  0.5, 1.0, 1.0, 1.0, 0.0, 1.0, // Top-left
+     1.5,  0.5, 1.0, 1.0, 1.0, 1.0, 1.0, // Top-right
+     1.5, -0.5, 1.0, 1.0, 1.0, 1.0, 0.0, // Bottom-right
+     0.5, -0.5, 1.0, 1.0, 1.0, 0.0, 0.0, // Bottom-left
 ];
 
 // Shader sources
@@ -221,9 +221,9 @@ static FS_SRC: &'static str =
     void main() {
        vec4 colKitten = texture(texKitten, v2f_texcoord);
        vec4 colPuppy  = texture(texPuppy, v2f_texcoord);
-       // out_color = mix(colKitten, colPuppy, 0.5) * vec4(v2f_color, 1.0);
+       out_color = mix(colKitten, colPuppy, 0.5) * vec4(v2f_color, 1.0);
        // out_color = colKitten * vec4(v2f_color, 1.0);
-       out_color = mix(colKitten, colPuppy, 0.5);
+       // out_color = mix(colKitten, colPuppy, 0.5);
     }";
 
 
