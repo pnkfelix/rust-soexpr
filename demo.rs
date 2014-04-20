@@ -759,12 +759,12 @@ static VERTEX_DATA: VERTEX_DATA_TYPE = [
     //     "triangle_color".with_c_str(|ptr| gl::GetUniformLocation(program1.name, ptr))
     // };
 
-    let textures = Textures::new(2);
+    let textures = Textures::new(3);
 
     let texture_unit0 = TextureUnit::new(0);
     let texture_unit1 = TextureUnit::new(1);
     texture_unit0.active();
-    textures.bind(0, Texture2D);
+    textures.bind(1, Texture2D);
     let image = try!(surf::Surface::from_bmp(&Path::new("sample.bmp")));
     let (width, height) = (image.get_width(), image.get_height());
     image.with_lock(|pixels| {
@@ -790,7 +790,7 @@ static VERTEX_DATA: VERTEX_DATA_TYPE = [
 
 
     texture_unit1.active();
-    textures.bind(1, Texture2D);
+    textures.bind(2, Texture2D);
     let image = try!(surf::Surface::from_bmp(&Path::new("sample2.bmp")));
     let (width, height) = (image.get_width(), image.get_height());
     image.with_lock(|pixels| {
