@@ -90,6 +90,103 @@ mod tests {
 //    pub mod soe;
 }
 
+pub mod glsl {
+    use std::str;
+    use gl::types::*;
+    use gl;
+
+    pub struct VertexShaderBuilder {
+        header: ~str,
+        lines: Vec<~str>
+    }
+
+    pub struct VertexShader {
+        pub name: GLuint,
+    }
+
+    #[allow(dead_code)]
+    struct FragmentShaderBuilder {
+        header: ~str,
+        lines: Vec<~str>
+    }
+
+    impl VertexShaderBuilder {
+        pub fn compile(&self) -> VertexShader {
+            let lines : Vec<_> =
+                self.lines.iter().map(|s|s.as_slice()).collect();
+            let name =
+                super::compile_shader(lines.as_slice(), gl::VERTEX_SHADER);
+            VertexShader { name: name }
+        }
+    }
+
+    pub struct Global {
+        type_: ~str,
+        name: ~str,
+    }
+
+    impl VertexShaderBuilder {
+        /// use via e.g. VertexShaderBuilder::new("#version 150 core")
+        pub fn new<S:Str>(version_string: S) -> VertexShaderBuilder {
+            let hdr = version_string.into_owned();
+            VertexShaderBuilder {
+                header: hdr.clone(),
+                lines: vec!(hdr),
+            }
+        }
+
+        pub fn new_150core() -> VertexShaderBuilder {
+            VertexShaderBuilder::new("#version 150 core\n")
+        }
+
+        pub fn clear(&mut self) {
+            self.lines.clear();
+            self.lines.push(self.header.clone());
+        }
+
+        fn push<S:Str>(&mut self, line: S) {
+            self.lines.push(line.into_owned())
+        }
+
+        pub fn global(&mut self, qualifiers: &str, type_: &str, name: &str) -> Global {
+            self.push(format!("{:s} {:s} {:s};", qualifiers, type_, name));
+            Global { type_: type_.into_owned(), name: name.into_owned() }
+        }
+
+        pub fn then<S:Str>(&mut self, line: S) {
+            self.push(line);
+        }
+
+        pub fn def_fn<C:ContentFiller>(
+            &mut self, name: &str, args: &[&str], ret: &str, content: C) {
+            let sig = args.connect(", ");
+            self.push(format!("{:s} {:s}({:s}) {}", ret, name, sig,
+                              "{"));
+            content.fill(|line| { self.push(line); });
+            self.push("}");
+        }
+    }
+
+    pub trait ContentFiller {
+        /// Calls `line` on each line of content.
+        fn fill(&self, line:|str::MaybeOwned|);
+    }
+
+    impl<'a> ContentFiller for &'a str {
+        fn fill(&self, line:|str::MaybeOwned|) {
+            line(str::Slice(*self))
+        }
+    }
+
+    impl<'a, S: Str> ContentFiller for &'a [S] {
+        fn fill(&self, line:|str::MaybeOwned|) {
+            for s in self.iter() {
+                line(str::Slice(s.as_slice()))
+            }
+        }
+    }
+}
+
 struct VertexArrays {
     len: GLsizei,
     names: ~[GLuint],
@@ -268,7 +365,26 @@ static VERTEX_DATA: [GLfloat, ..56] = [
      0.5, -0.5, 1.0, 1.0, 1.0, 0.0, 0.0, // Bottom-left
 ];
 
-// Shader sources
+    // Shader sources
+    let mut vs = glsl::VertexShaderBuilder::new_150core();
+    vs.global("in", "vec2", "position");
+    vs.global("in", "vec3", "color");
+    vs.global("in", "vec2", "texcoord");
+
+    vs.global("out", "vec3", "v2f_color");
+    vs.global("out", "vec2", "v2f_texcoord");
+
+    vs.global("uniform", "mat4", "model");
+    vs.global("uniform", "mat4", "view");
+    vs.global("uniform", "mat4", "proj");
+
+    vs.def_fn("main", [], "void", &[
+        "v2f_color = color;",
+        "v2f_texcoord = texcoord;",
+        "gl_Position = model * vec4(position, 0.0, 1.0);",
+        ]);
+
+#[allow(dead_code)]
 static VS_SRC: &'static str =
    "#version 150 core
     in vec2 position;
@@ -308,9 +424,9 @@ static FS_SRC: &'static str =
 
 
     // Create GLSL shaders
-    let vs = compile_shader([VS_SRC], gl::VERTEX_SHADER);
+    let vs = vs.compile();
     let fs = compile_shader([FS_SRC], gl::FRAGMENT_SHADER);
-    let program1 = link_program(vs, fs);
+    let program1 = link_program(vs.name, fs);
 
     let mut vao;
     let mut vbo;
@@ -489,8 +605,9 @@ static FS_SRC: &'static str =
     // sdl::timer::delay(2000);
 
     return Ok(());
+}
 
-fn compile_shader(src: &[&str], ty: GLenum) -> GLuint {
+pub fn compile_shader(src: &[&str], ty: GLenum) -> GLuint {
     let shader = gl::CreateShader(ty);
     unsafe {
         // Attempt to compile the shader
@@ -549,7 +666,6 @@ fn compile_shader(src: &[&str], ty: GLenum) -> GLuint {
         program
     }
 
-}
 
 
 
