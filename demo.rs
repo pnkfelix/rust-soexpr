@@ -430,26 +430,6 @@ static VERTEX_DATA: [GLfloat, ..56] = [
         gl_Position = model * vec4(position, 0.0, 1.0);"
               );
 
-#[allow(dead_code)]
-static VS_SRC: &'static str =
-   "#version 150 core
-    in vec2 position;
-    in vec3 color;
-    in vec2 texcoord;
-
-    out vec3 v2f_color;
-    out vec2 v2f_texcoord;
-
-    uniform mat4 model;
-    uniform mat4 view;
-    uniform mat4 proj;
-
-    void main() {
-       v2f_color = color;
-       v2f_texcoord = texcoord;
-       gl_Position = model * vec4(position, 0.0, 1.0);
-    }";
-
     let mut fs : glsl::FragmentShaderBuilder = ShaderBuilder::new_150core();
     fs.global("in", "vec3", "v2f_color");
     fs.global("in", "vec2", "v2f_texcoord");
@@ -461,28 +441,8 @@ static VS_SRC: &'static str =
         vec4 colPuppy  = texture(texPuppy, v2f_texcoord);
         out_color = mix(colKitten, colPuppy, 0.5) * vec4(v2f_color, 1.0);
         // out_color = colKitten * vec4(v2f_color, 1.0);
-        // out_color = mix(colKitten, colPuppy, 0.5);
-");
-
-#[allow(dead_code)]
-static FS_SRC: &'static str =
-   "#version 150 core
-    in vec3 v2f_color;
-    in vec2 v2f_texcoord;
-
-    out vec4 out_color;
-
-    uniform sampler2D texKitten;
-    uniform sampler2D texPuppy;
-
-    void main() {
-       vec4 colKitten = texture(texKitten, v2f_texcoord);
-       vec4 colPuppy  = texture(texPuppy, v2f_texcoord);
-       out_color = mix(colKitten, colPuppy, 0.5) * vec4(v2f_color, 1.0);
-       // out_color = colKitten * vec4(v2f_color, 1.0);
-       // out_color = mix(colKitten, colPuppy, 0.5);
-    }";
-
+        // out_color = mix(colKitten, colPuppy, 0.5);"
+              );
 
     // Create GLSL shaders
     let vs = vs.compile();
