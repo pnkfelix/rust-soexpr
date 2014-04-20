@@ -17,10 +17,12 @@ extern crate time;
 
 use std::cast;
 use std::c_str;
+use std::default::Default;
 use std::mem;
 use std::os;
 use std::ptr;
 use std::slice;
+use std::slice::Vector;
 use std::str;
 use std::vec;
 use std::num::{Zero,One,Float};
@@ -97,6 +99,7 @@ pub mod glsl {
     use mat = cgmath::matrix;
 
     use std::cast;
+    use std::mem;
     use std::str;
 
     pub struct VertexShader {
@@ -551,9 +554,19 @@ fn gl() -> Result<(), ~str> {
 
     gl::load_with(vid::gl_get_proc_address);
 
+    #[deriving(Default)]
+    struct VertexDataRow {
+        x: GLfloat,
+        y: GLfloat,
+        r: GLfloat,
+        g: GLfloat,
+        b: GLfloat,
+        texcoord: (GLfloat, GLfloat)
+    }
 
 // Vertex data
-static VERTEX_DATA: [GLfloat, ..56] = [
+type VERTEX_DATA_TYPE = [GLfloat, ..56];
+static VERTEX_DATA: VERTEX_DATA_TYPE = [
     // X     Y    R    G    B  Texcoords
     -1.0,  0.5, 0.5, 0.5, 0.5, 0.0, 0.0, // Top-left
      0.0,  0.5, 1.0, 0.0, 0.0, 1.0, 0.0, // Top-right
@@ -565,6 +578,10 @@ static VERTEX_DATA: [GLfloat, ..56] = [
      1.5, -0.5, 1.0, 1.0, 1.0, 1.0, 0.0, // Bottom-right
      0.5, -0.5, 1.0, 1.0, 1.0, 0.0, 0.0, // Bottom-left
 ];
+
+    type rows_type = [VertexDataRow, ..8];
+    assert_eq!(mem::size_of::<rows_type>(), mem::size_of::<VERTEX_DATA_TYPE>());
+    let rows : &rows_type = unsafe { cast::transmute(&VERTEX_DATA) };
 
     // Shader sources
     let mut vs : glsl::VertexShaderBuilder = ShaderBuilder::new_150core();
@@ -614,33 +631,32 @@ static VERTEX_DATA: [GLfloat, ..56] = [
 
         // Create a Vertex Buffer Object and copy the vertex data to it
         vbo = VertexBuffers::new(1);
-        vbo.bind_and_init_array(0, VERTEX_DATA, StaticDraw);
+        vbo.bind_and_init_array(0, rows.slice_from(0), StaticDraw);
 
         // Use shader program
         program1.use_program();
         program1.bind_frag_data_location(0, &out_color_g);
 
         // Specify the layout of the vertex data
+        let default : VertexDataRow = Default::default();
+        let row_size = mem::size_of::<VertexDataRow>() as GLsizei;
+        let pos_offset = (&default.x as *_ as uint) - cast::transmute(&default);
         let pos_attr = program1.attrib_location(&position_g);
         pos_attr.enable_current_vertex_attrib_array();
         pos_attr.vertex_attrib_pointer(
-            2, gl::FLOAT, gl::FALSE as GLboolean,
-            7 * mem::size_of::<GLfloat>() as GLsizei,
-            ptr::null());
+            2, gl::FLOAT, gl::FALSE as GLboolean, row_size, cast::transmute(pos_offset));
 
+        let col_offset = (&default.r as *_ as uint) - cast::transmute(&default);
         let col_attr = program1.attrib_location(&color_g);
         col_attr.enable_current_vertex_attrib_array();
         col_attr.vertex_attrib_pointer(
-            3, gl::FLOAT, gl::FALSE as GLboolean,
-            7 * mem::size_of::<GLfloat>() as GLsizei,
-            cast::transmute(2 * mem::size_of::<GLfloat>() as GLsizeiptr));
+            3, gl::FLOAT, gl::FALSE as GLboolean, row_size, cast::transmute(col_offset));
 
+        let tex_offset = (&default.texcoord as *_ as uint) - cast::transmute(&default);
         let tex_attr = program1.attrib_location(&texcoord_g);
         tex_attr.enable_current_vertex_attrib_array();
         tex_attr.vertex_attrib_pointer(
-            2, gl::FLOAT, gl::FALSE as GLboolean,
-            7 * mem::size_of::<GLfloat>() as GLsizei,
-            cast::transmute(5 * mem::size_of::<GLfloat>() as GLsizeiptr));
+            2, gl::FLOAT, gl::FALSE as GLboolean, row_size, cast::transmute(tex_offset));
     }
 
     // let uni_color = unsafe {
