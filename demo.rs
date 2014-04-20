@@ -91,9 +91,13 @@ mod tests {
 }
 
 pub mod glsl {
-    use std::str;
     use gl::types::*;
     use gl;
+
+    use mat = cgmath::matrix;
+
+    use std::cast;
+    use std::str;
 
     pub struct VertexShader {
         name: GLuint,
@@ -128,68 +132,84 @@ pub mod glsl {
         }
     }
 
-    pub trait UniformArg { fn set_at_location(self, location: GLint); }
+    pub trait UniformArg { fn set_at_location(&self, location: GLint); }
 
     impl UniformArg for GLfloat {
-        fn set_at_location(self, location: GLint) {
-            let v0 = self; gl::Uniform1f(location, v0);
+        fn set_at_location(&self, location: GLint) {
+            let &v0 = self; gl::Uniform1f(location, v0);
         }
     }
     impl UniformArg for (GLfloat, GLfloat) {
-        fn set_at_location(self, location: GLint) {
-            let (v0, v1) = self; gl::Uniform2f(location, v0, v1);
+        fn set_at_location(&self, location: GLint) {
+            let &(v0, v1) = self; gl::Uniform2f(location, v0, v1);
         }
     }
     impl UniformArg for (GLfloat, GLfloat, GLfloat) {
-        fn set_at_location(self, location: GLint) {
-            let (v0, v1, v2) = self; gl::Uniform3f(location, v0, v1, v2);
+        fn set_at_location(&self, location: GLint) {
+            let &(v0, v1, v2) = self; gl::Uniform3f(location, v0, v1, v2);
         }
     }
     impl UniformArg for (GLfloat, GLfloat, GLfloat, GLfloat) {
-        fn set_at_location(self, location: GLint) {
-            let (v0, v1, v2, v3) = self; gl::Uniform4f(location, v0, v1, v2, v3);
+        fn set_at_location(&self, location: GLint) {
+            let &(v0, v1, v2, v3) = self; gl::Uniform4f(location, v0, v1, v2, v3);
         }
     }
 
     impl UniformArg for GLint {
-        fn set_at_location(self, location: GLint) {
-            let v0 = self; gl::Uniform1i(location, v0);
+        fn set_at_location(&self, location: GLint) {
+            let &v0 = self; gl::Uniform1i(location, v0);
         }
     }
     impl UniformArg for (GLint, GLint) {
-        fn set_at_location(self, location: GLint) {
-            let (v0, v1) = self; gl::Uniform2i(location, v0, v1);
+        fn set_at_location(&self, location: GLint) {
+            let &(v0, v1) = self; gl::Uniform2i(location, v0, v1);
         }
     }
     impl UniformArg for (GLint, GLint, GLint) {
-        fn set_at_location(self, location: GLint) {
-            let (v0, v1, v2) = self; gl::Uniform3i(location, v0, v1, v2);
+        fn set_at_location(&self, location: GLint) {
+            let &(v0, v1, v2) = self; gl::Uniform3i(location, v0, v1, v2);
         }
     }
     impl UniformArg for (GLint, GLint, GLint, GLint) {
-        fn set_at_location(self, location: GLint) {
-            let (v0, v1, v2, v3) = self; gl::Uniform4i(location, v0, v1, v2, v3);
+        fn set_at_location(&self, location: GLint) {
+            let &(v0, v1, v2, v3) = self; gl::Uniform4i(location, v0, v1, v2, v3);
         }
     }
 
     impl UniformArg for GLuint {
-        fn set_at_location(self, location: GLint) {
-            let v0 = self; gl::Uniform1ui(location, v0);
+        fn set_at_location(&self, location: GLint) {
+            let &v0 = self; gl::Uniform1ui(location, v0);
         }
     }
     impl UniformArg for (GLuint, GLuint) {
-        fn set_at_location(self, location: GLint) {
-            let (v0, v1) = self; gl::Uniform2ui(location, v0, v1);
+        fn set_at_location(&self, location: GLint) {
+            let &(v0, v1) = self; gl::Uniform2ui(location, v0, v1);
         }
     }
     impl UniformArg for (GLuint, GLuint, GLuint) {
-        fn set_at_location(self, location: GLint) {
-            let (v0, v1, v2) = self; gl::Uniform3ui(location, v0, v1, v2);
+        fn set_at_location(&self, location: GLint) {
+            let &(v0, v1, v2) = self; gl::Uniform3ui(location, v0, v1, v2);
         }
     }
     impl UniformArg for (GLuint, GLuint, GLuint, GLuint) {
-        fn set_at_location(self, location: GLint) {
-            let (v0, v1, v2, v3) = self; gl::Uniform4ui(location, v0, v1, v2, v3);
+        fn set_at_location(&self, location: GLint) {
+            let &(v0, v1, v2, v3) = self; gl::Uniform4ui(location, v0, v1, v2, v3);
+        }
+    }
+
+    impl UniformArg for mat::Matrix4<f32> {
+        fn set_at_location(&self, location: GLint) {
+            unsafe {
+                gl::UniformMatrix4fv(location, 1, gl::FALSE, cast::transmute(self));
+            }
+        }
+    }
+
+    impl<'a> UniformArg for &'a mat::Matrix4<f32> {
+        fn set_at_location(&self, location: GLint) {
+            unsafe {
+                gl::UniformMatrix4fv(location, 1, gl::FALSE, cast::transmute(*self));
+            }
         }
     }
 
@@ -734,23 +754,20 @@ static VERTEX_DATA: [GLfloat, ..56] = [
         // let result = trans.mul_v(&Vector4::new(1.0, 0.0, 0.0, 1.0));
         // println!("{:f}, {:f}, {:f}", result.x, result.y, result.z);
         unsafe {
-            let uni_trans =  program1.uniform_location(&model_g);
-            gl::UniformMatrix4fv(uni_trans.name, 1, gl::FALSE, cast::transmute(&trans));
+            program1.set_uniform(&model_g, &trans);
         }
 
         let view = mat::Matrix4::<f32>::identity();
         unsafe {
-            let uni_view = program1.uniform_location(&view_g);
-            gl::UniformMatrix4fv(uni_view.name, 1, gl::FALSE, cast::transmute(&view));
+            program1.set_uniform(&view_g, &view);
         }
 
-        let proj = perspective(ang::deg(45.0).to_rad(),
+        let proj = perspective(ang::deg(45.0f32).to_rad(),
                                800.0 / 600.0,
                                1.0,
                                10.0);
         unsafe {
-            let uni_proj = program1.uniform_location(&proj_g);
-            gl::UniformMatrix4fv(uni_proj.name, 1, gl::FALSE, cast::transmute(&proj));
+            program1.set_uniform(&proj_g, &proj);
         }
 
         // Draw a rectangle from the 6 vertices
