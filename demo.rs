@@ -122,14 +122,49 @@ pub mod glsl {
         pub name: GLint,
     }
 
+    pub trait TupleReflect {
+        fn size(&self) -> GLint;
+        fn type_(&self) -> GLenum;
+        unsafe fn offset<T>(&self, default_row: &T) -> *GLvoid {
+            let offset = (self as *_ as uint) - cast::transmute(default_row);
+            cast::transmute(offset)
+        }
+    }
+
+    impl TupleReflect for (GLfloat, GLfloat) {
+        fn size(&self) -> GLint { 2 }
+        fn type_(&self) -> GLenum { gl::FLOAT }
+    }
+
+    impl TupleReflect for (GLfloat, GLfloat, GLfloat) {
+        fn size(&self) -> GLint { 3 }
+        fn type_(&self) -> GLenum { gl::FLOAT }
+    }
+
+    pub trait VertexAttribPointerRTTI {
+        fn size(&self) -> GLint;
+        fn type_(&self) -> GLenum;
+        fn stride(&self) -> GLsizei;
+        fn pointer(&self) -> *GLvoid;
+    }
+
+    impl VertexAttribPointerRTTI for (GLint, GLenum, GLsizei, *GLvoid) {
+        fn size(&self) -> GLint { self.val0() }
+        fn type_(&self) -> GLenum { self.val1() }
+        fn stride(&self) -> GLsizei { self.val2() }
+        fn pointer(&self) -> *GLvoid { self.val3() }
+    }
 
     impl AttribLocation {
         pub fn enable_current_vertex_attrib_array(&self) {
             gl::EnableVertexAttribArray(self.name as GLuint);
         }
-        pub unsafe fn vertex_attrib_pointer(&self, size: GLint, type_: GLenum,
-                                     normalized: GLboolean, stride: GLsizei,
-                                     pointer: *GLvoid) {
+        pub unsafe fn vertex_attrib_pointer<R:VertexAttribPointerRTTI>(
+            &self, normalized: GLboolean, args: R) {
+            let size = args.size();
+            let type_ = args.type_();
+            let stride = args.stride();
+            let pointer = args.pointer();
             gl::VertexAttribPointer(
                 self.name as GLuint, size, type_, normalized, stride, pointer);
         }
@@ -491,6 +526,7 @@ fn perspective<V:Primitive+Zero+One+Float+ApproxEq<V>+Mul<V,V>+PartOrdFloat<V>>(
 
 fn gl() -> Result<(), ~str> {
     use glsl::ShaderBuilder;
+    use glsl::TupleReflect;
 
     let (width, height) = (800, 600);
 
@@ -556,11 +592,8 @@ fn gl() -> Result<(), ~str> {
 
     #[deriving(Default)]
     struct VertexDataRow {
-        x: GLfloat,
-        y: GLfloat,
-        r: GLfloat,
-        g: GLfloat,
-        b: GLfloat,
+        xy: (GLfloat, GLfloat),
+        rgb: (GLfloat, GLfloat, GLfloat),
         texcoord: (GLfloat, GLfloat)
     }
 
@@ -640,23 +673,24 @@ static VERTEX_DATA: VERTEX_DATA_TYPE = [
         // Specify the layout of the vertex data
         let default : VertexDataRow = Default::default();
         let row_size = mem::size_of::<VertexDataRow>() as GLsizei;
-        let pos_offset = (&default.x as *_ as uint) - cast::transmute(&default);
+        let pos_size = default.xy.size();
+        let pos_offset = default.xy.offset(&default);
         let pos_attr = program1.attrib_location(&position_g);
         pos_attr.enable_current_vertex_attrib_array();
-        pos_attr.vertex_attrib_pointer(
-            2, gl::FLOAT, gl::FALSE as GLboolean, row_size, cast::transmute(pos_offset));
+        pos_attr.vertex_attrib_pointer(gl::FALSE as GLboolean, 
+                                       (2 as GLint, gl::FLOAT, row_size, pos_offset));
 
-        let col_offset = (&default.r as *_ as uint) - cast::transmute(&default);
+        let col_offset = default.rgb.offset(&default);
         let col_attr = program1.attrib_location(&color_g);
         col_attr.enable_current_vertex_attrib_array();
-        col_attr.vertex_attrib_pointer(
-            3, gl::FLOAT, gl::FALSE as GLboolean, row_size, cast::transmute(col_offset));
+        col_attr.vertex_attrib_pointer(gl::FALSE as GLboolean, 
+                                       (3 as GLint, gl::FLOAT, row_size, col_offset));
 
-        let tex_offset = (&default.texcoord as *_ as uint) - cast::transmute(&default);
+        let tex_offset = default.texcoord.offset(&default);
         let tex_attr = program1.attrib_location(&texcoord_g);
         tex_attr.enable_current_vertex_attrib_array();
-        tex_attr.vertex_attrib_pointer(
-            2, gl::FLOAT, gl::FALSE as GLboolean, row_size, cast::transmute(tex_offset));
+        tex_attr.vertex_attrib_pointer(gl::FALSE as GLboolean, 
+                                       (2 as GLint, gl::FLOAT, row_size, tex_offset));
     }
 
     // let uni_color = unsafe {
