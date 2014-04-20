@@ -533,6 +533,44 @@ impl Drop for VertexBuffers {
     }
 }
 
+struct TextureUnit {
+    idx: GLuint
+}
+
+impl TextureUnit {
+    fn new(idx: GLuint) -> TextureUnit {
+        assert!(idx < gl::MAX_COMBINED_TEXTURE_IMAGE_UNITS);
+        TextureUnit{ idx: idx }
+    }
+
+    fn active(&self) {
+        gl::ActiveTexture(gl::TEXTURE0 + self.idx);
+    }
+}
+
+struct Textures {
+    len: GLsizei,
+    names: ~[GLuint],
+}
+
+enum TargetDim {
+    Texture1D = gl::TEXTURE_1D, Texture2D = gl::TEXTURE_2D, Texture3D = gl::TEXTURE_3D
+}
+
+impl Textures {
+    fn new(len: uint) -> Textures {
+        let len = len as GLsizei;
+        assert!(len > 0);
+        let mut names = slice::from_elem(len as uint, 0u32);
+        unsafe { gl::GenTextures(len, &mut names[0]) }
+        Textures { len: len, names: names }
+    }
+
+    fn bind(&self, idx: uint, dim: TargetDim) {
+        gl::BindTexture(dim as GLenum, self.names[idx]);
+    }
+}
+
 
 fn perspective<V:Primitive+Zero+One+Float+ApproxEq<V>+Mul<V,V>+PartOrdFloat<V>>(
     fovy: ang::Rad<V>, aspect: V, zNear: V, zFar: V) -> mat::Matrix4<V>
@@ -721,11 +759,12 @@ static VERTEX_DATA: VERTEX_DATA_TYPE = [
     //     "triangle_color".with_c_str(|ptr| gl::GetUniformLocation(program1.name, ptr))
     // };
 
-    let mut textures = vec!(0, 0);
-    unsafe { gl::GenTextures(2, textures.as_mut_ptr()); }
+    let textures = Textures::new(2);
 
-    gl::ActiveTexture(gl::TEXTURE0);
-    gl::BindTexture(gl::TEXTURE_2D, *textures.get(0));
+    let texture_unit0 = TextureUnit::new(0);
+    let texture_unit1 = TextureUnit::new(1);
+    texture_unit0.active();
+    textures.bind(0, Texture2D);
     let image = try!(surf::Surface::from_bmp(&Path::new("sample.bmp")));
     let (width, height) = (image.get_width(), image.get_height());
     image.with_lock(|pixels| {
@@ -750,8 +789,8 @@ static VERTEX_DATA: VERTEX_DATA_TYPE = [
     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as GLint);
 
 
-    gl::ActiveTexture(gl::TEXTURE1);
-    gl::BindTexture(gl::TEXTURE_2D, *textures.get(1));
+    texture_unit1.active();
+    textures.bind(1, Texture2D);
     let image = try!(surf::Surface::from_bmp(&Path::new("sample2.bmp")));
     let (width, height) = (image.get_width(), image.get_height());
     image.with_lock(|pixels| {
