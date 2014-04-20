@@ -16,6 +16,7 @@ extern crate gl;
 extern crate time;
 
 use std::cast;
+use std::c_str;
 use std::mem;
 use std::os;
 use std::ptr;
@@ -307,8 +308,8 @@ static FS_SRC: &'static str =
 
 
     // Create GLSL shaders
-    let vs = compile_shader(VS_SRC, gl::VERTEX_SHADER);
-    let fs = compile_shader(FS_SRC, gl::FRAGMENT_SHADER);
+    let vs = compile_shader([VS_SRC], gl::VERTEX_SHADER);
+    let fs = compile_shader([FS_SRC], gl::FRAGMENT_SHADER);
     let program1 = link_program(vs, fs);
 
     let mut vao;
@@ -489,11 +490,25 @@ static FS_SRC: &'static str =
 
     return Ok(());
 
-fn compile_shader(src: &str, ty: GLenum) -> GLuint {
+fn compile_shader(src: &[&str], ty: GLenum) -> GLuint {
     let shader = gl::CreateShader(ty);
     unsafe {
         // Attempt to compile the shader
-        src.with_c_str(|ptr| gl::ShaderSource(shader, 1, &ptr, ptr::null()));
+        let strs : Vec<c_str::CString> = src.iter().map(|s|s.to_c_str()).collect();
+        gl::ShaderSource(shader,
+                         {
+                             let src_len = src.len() as GLsizei;
+                             assert!(src_len > 0);
+                             src_len
+                         },
+                         strs.iter().map(|cs| {
+                             cs.as_bytes_no_nul().as_ptr() as *GLchar
+                         }).collect::<Vec<_>>().as_ptr(),
+                         strs.iter().map(|cs| {
+                             let l = cs.len() as GLint;
+                             assert!(l >= 0);
+                             l
+                         }).collect::<Vec<_>>().as_ptr());
         gl::CompileShader(shader);
 
         // Get the compile status
