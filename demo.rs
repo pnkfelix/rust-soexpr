@@ -125,6 +125,29 @@ pub mod glsl {
         name: ~str,
     }
 
+    pub trait ShaderBuilder {
+        fn clear(&mut self);
+        fn push<S:Str>(&mut self, line: S);
+
+        fn global(&mut self, qualifiers: &str, type_: &str, name: &str) -> Global {
+            self.push(format!("{:s} {:s} {:s};", qualifiers, type_, name));
+            Global { type_: type_.into_owned(), name: name.into_owned() }
+        }
+
+        fn then<S:Str>(&mut self, line: S) {
+            self.push(line);
+        }
+
+        fn def_fn<C:ContentFiller>(
+            &mut self, name: &str, args: &[&str], ret: &str, content: C) {
+            let sig = args.connect(", ");
+            self.push(format!("{:s} {:s}({:s}) {}", ret, name, sig,
+                              "{"));
+            content.fill(|line| { self.push(line); });
+            self.push("}");
+        }
+    }
+
     impl VertexShaderBuilder {
         /// use via e.g. VertexShaderBuilder::new("#version 150 core")
         pub fn new<S:Str>(version_string: S) -> VertexShaderBuilder {
@@ -138,32 +161,16 @@ pub mod glsl {
         pub fn new_150core() -> VertexShaderBuilder {
             VertexShaderBuilder::new("#version 150 core\n")
         }
+    }
 
-        pub fn clear(&mut self) {
+    impl ShaderBuilder for VertexShaderBuilder {
+        fn clear(&mut self) {
             self.lines.clear();
             self.lines.push(self.header.clone());
         }
 
         fn push<S:Str>(&mut self, line: S) {
             self.lines.push(line.into_owned())
-        }
-
-        pub fn global(&mut self, qualifiers: &str, type_: &str, name: &str) -> Global {
-            self.push(format!("{:s} {:s} {:s};", qualifiers, type_, name));
-            Global { type_: type_.into_owned(), name: name.into_owned() }
-        }
-
-        pub fn then<S:Str>(&mut self, line: S) {
-            self.push(line);
-        }
-
-        pub fn def_fn<C:ContentFiller>(
-            &mut self, name: &str, args: &[&str], ret: &str, content: C) {
-            let sig = args.connect(", ");
-            self.push(format!("{:s} {:s}({:s}) {}", ret, name, sig,
-                              "{"));
-            content.fill(|line| { self.push(line); });
-            self.push("}");
         }
     }
 
@@ -287,6 +294,7 @@ fn perspective<V:Primitive+Zero+One+Float+ApproxEq<V>+Mul<V,V>+PartOrdFloat<V>>(
 }
 
 fn gl() -> Result<(), ~str> {
+    use glsl::ShaderBuilder;
 
     let (width, height) = (800, 600);
 
