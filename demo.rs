@@ -95,17 +95,144 @@ pub mod glsl {
     use gl::types::*;
     use gl;
 
-    pub struct VertexShaderBuilder {
-        header: ~str,
-        lines: Vec<~str>
-    }
-
     pub struct VertexShader {
-        pub name: GLuint,
+        name: GLuint,
     }
 
     pub struct FragmentShader {
-        pub name: GLuint,
+        name: GLuint,
+    }
+
+    pub struct Program {
+        name: GLuint,
+    }
+
+    pub struct AttribLocation {
+        pub name: GLint,
+    }
+
+    pub struct UniformLocation {
+        pub name: GLint,
+    }
+
+
+    impl AttribLocation {
+        pub fn enable_current_vertex_attrib_array(&self) {
+            gl::EnableVertexAttribArray(self.name as GLuint);
+        }
+        pub unsafe fn vertex_attrib_pointer(&self, size: GLint, type_: GLenum,
+                                     normalized: GLboolean, stride: GLsizei,
+                                     pointer: *GLvoid) {
+            gl::VertexAttribPointer(
+                self.name as GLuint, size, type_, normalized, stride, pointer);
+        }
+    }
+
+    pub trait UniformArg { fn set_at_location(self, location: GLint); }
+
+    impl UniformArg for GLfloat {
+        fn set_at_location(self, location: GLint) {
+            let v0 = self; gl::Uniform1f(location, v0);
+        }
+    }
+    impl UniformArg for (GLfloat, GLfloat) {
+        fn set_at_location(self, location: GLint) {
+            let (v0, v1) = self; gl::Uniform2f(location, v0, v1);
+        }
+    }
+    impl UniformArg for (GLfloat, GLfloat, GLfloat) {
+        fn set_at_location(self, location: GLint) {
+            let (v0, v1, v2) = self; gl::Uniform3f(location, v0, v1, v2);
+        }
+    }
+    impl UniformArg for (GLfloat, GLfloat, GLfloat, GLfloat) {
+        fn set_at_location(self, location: GLint) {
+            let (v0, v1, v2, v3) = self; gl::Uniform4f(location, v0, v1, v2, v3);
+        }
+    }
+
+    impl UniformArg for GLint {
+        fn set_at_location(self, location: GLint) {
+            let v0 = self; gl::Uniform1i(location, v0);
+        }
+    }
+    impl UniformArg for (GLint, GLint) {
+        fn set_at_location(self, location: GLint) {
+            let (v0, v1) = self; gl::Uniform2i(location, v0, v1);
+        }
+    }
+    impl UniformArg for (GLint, GLint, GLint) {
+        fn set_at_location(self, location: GLint) {
+            let (v0, v1, v2) = self; gl::Uniform3i(location, v0, v1, v2);
+        }
+    }
+    impl UniformArg for (GLint, GLint, GLint, GLint) {
+        fn set_at_location(self, location: GLint) {
+            let (v0, v1, v2, v3) = self; gl::Uniform4i(location, v0, v1, v2, v3);
+        }
+    }
+
+    impl UniformArg for GLuint {
+        fn set_at_location(self, location: GLint) {
+            let v0 = self; gl::Uniform1ui(location, v0);
+        }
+    }
+    impl UniformArg for (GLuint, GLuint) {
+        fn set_at_location(self, location: GLint) {
+            let (v0, v1) = self; gl::Uniform2ui(location, v0, v1);
+        }
+    }
+    impl UniformArg for (GLuint, GLuint, GLuint) {
+        fn set_at_location(self, location: GLint) {
+            let (v0, v1, v2) = self; gl::Uniform3ui(location, v0, v1, v2);
+        }
+    }
+    impl UniformArg for (GLuint, GLuint, GLuint, GLuint) {
+        fn set_at_location(self, location: GLint) {
+            let (v0, v1, v2, v3) = self; gl::Uniform4ui(location, v0, v1, v2, v3);
+        }
+    }
+
+    impl UniformLocation {
+        pub fn uniform<U:UniformArg>(&self, arg: U) {
+            arg.set_at_location(self.name);
+        }
+    }
+
+    impl Program {
+        pub fn link(vs: &VertexShader, fs: &FragmentShader) -> Program {
+            let name = super::link_program(vs.name, fs.name);
+            Program { name: name }
+        }
+
+        pub fn use_program(&self) {
+            gl::UseProgram(self.name);
+        }
+
+        pub unsafe fn attrib_location(&self, g: &Global) -> AttribLocation {
+            let name = g.name.with_c_str(|ptr| gl::GetAttribLocation(self.name, ptr));
+            AttribLocation { name: name }
+        }
+
+        pub unsafe fn set_uniform<U:UniformArg>(&self, g: &Global, arg: U) {
+            let loc = self.uniform_location(g);
+            loc.uniform(arg);
+        }
+
+        pub unsafe fn uniform_location(&self, g: &Global) -> UniformLocation {
+            let name = g.name.with_c_str(|ptr| gl::GetUniformLocation(self.name, ptr));
+            UniformLocation { name: name }
+        }
+
+        pub unsafe fn bind_frag_data_location(&self, colorNumber: GLuint, g: &Global) {
+            g.name.with_c_str(|ptr| gl::BindFragDataLocation(self.name, colorNumber, ptr));
+        }
+
+    }
+
+    pub struct VertexShaderBuilder {
+        header: ~str,
+        lines: Vec<~str>
     }
 
     pub struct FragmentShaderBuilder {
@@ -421,16 +548,16 @@ static VERTEX_DATA: [GLfloat, ..56] = [
 
     // Shader sources
     let mut vs : glsl::VertexShaderBuilder = ShaderBuilder::new_150core();
-    vs.global("in", "vec2", "position");
-    vs.global("in", "vec3", "color");
-    vs.global("in", "vec2", "texcoord");
+    let position_g = vs.global("in", "vec2", "position");
+    let color_g    = vs.global("in", "vec3", "color");
+    let texcoord_g = vs.global("in", "vec2", "texcoord");
 
     let v2f_color    = vs.out_global("", "vec3", "v2f_color");
     let v2f_texcoord = vs.out_global("", "vec2", "v2f_texcoord");
 
-    vs.global("uniform", "mat4", "model");
-    vs.global("uniform", "mat4", "view");
-    vs.global("uniform", "mat4", "proj");
+    let model_g = vs.global("uniform", "mat4", "model");
+    let view_g  = vs.global("uniform", "mat4", "view");
+    let proj_g  = vs.global("uniform", "mat4", "proj");
 
     vs.def_fn("main", [], "void", "
         v2f_color = color;
@@ -441,9 +568,9 @@ static VERTEX_DATA: [GLfloat, ..56] = [
     let mut fs : glsl::FragmentShaderBuilder = ShaderBuilder::new_150core();
     fs.in_global("", &v2f_color);
     fs.in_global("", &v2f_texcoord);
-    fs.global("out", "vec4", "out_color");
-    fs.global("uniform", "sampler2D", "texKitten");
-    fs.global("uniform", "sampler2D", "texPuppy");
+    let out_color_g  = fs.global("out", "vec4", "out_color");
+    let tex_kitten_g = fs.global("uniform", "sampler2D", "texKitten");
+    let tex_puppy_g  = fs.global("uniform", "sampler2D", "texPuppy");
     fs.def_fn("main", [], "void", "
         vec4 colKitten = texture(texKitten, v2f_texcoord);
         vec4 colPuppy  = texture(texPuppy, v2f_texcoord);
@@ -455,7 +582,7 @@ static VERTEX_DATA: [GLfloat, ..56] = [
     // Create GLSL shaders
     let vs = vs.compile();
     let fs = fs.compile();
-    let program1 = link_program(vs.name, fs.name);
+    let program1 = glsl::Program::link(&vs, &fs);
 
     let mut vao;
     let mut vbo;
@@ -470,35 +597,35 @@ static VERTEX_DATA: [GLfloat, ..56] = [
         vbo.bind_and_init_array(0, VERTEX_DATA, StaticDraw);
 
         // Use shader program
-        gl::UseProgram(program1);
-        "out_color".with_c_str(|ptr| gl::BindFragDataLocation(program1, 0, ptr));
+        program1.use_program();
+        program1.bind_frag_data_location(0, &out_color_g);
 
         // Specify the layout of the vertex data
-        let pos_attr = "position".with_c_str(|ptr| gl::GetAttribLocation(program1, ptr));
-        gl::EnableVertexAttribArray(pos_attr as GLuint);
-        gl::VertexAttribPointer(pos_attr as GLuint, 2, gl::FLOAT,
-                                gl::FALSE as GLboolean,
-                                7 * mem::size_of::<GLfloat>() as GLsizei,
-                                ptr::null());
+        let pos_attr = program1.attrib_location(&position_g);
+        pos_attr.enable_current_vertex_attrib_array();
+        pos_attr.vertex_attrib_pointer(
+            2, gl::FLOAT, gl::FALSE as GLboolean,
+            7 * mem::size_of::<GLfloat>() as GLsizei,
+            ptr::null());
 
-        let col_attr = "color".with_c_str(|ptr| gl::GetAttribLocation(program1, ptr));
-        gl::EnableVertexAttribArray(col_attr as GLuint);
-        gl::VertexAttribPointer(col_attr as GLuint, 3, gl::FLOAT,
-                                gl::FALSE as GLboolean,
-                                7 * mem::size_of::<GLfloat>() as GLsizei,
-                                cast::transmute(2 * mem::size_of::<GLfloat>() as GLsizeiptr));
+        let col_attr = program1.attrib_location(&color_g);
+        col_attr.enable_current_vertex_attrib_array();
+        col_attr.vertex_attrib_pointer(
+            3, gl::FLOAT, gl::FALSE as GLboolean,
+            7 * mem::size_of::<GLfloat>() as GLsizei,
+            cast::transmute(2 * mem::size_of::<GLfloat>() as GLsizeiptr));
 
-        let tex_attr = "texcoord".with_c_str(|ptr| gl::GetAttribLocation(program1, ptr));
-        gl::EnableVertexAttribArray(tex_attr as GLuint);
-        gl::VertexAttribPointer(tex_attr as GLuint, 2, gl::FLOAT,
-                                gl::FALSE as GLboolean,
-                                7 * mem::size_of::<GLfloat>() as GLsizei,
-                                cast::transmute(5 * mem::size_of::<GLfloat>() as GLsizeiptr));
+        let tex_attr = program1.attrib_location(&texcoord_g);
+        tex_attr.enable_current_vertex_attrib_array();
+        tex_attr.vertex_attrib_pointer(
+            2, gl::FLOAT, gl::FALSE as GLboolean,
+            7 * mem::size_of::<GLfloat>() as GLsizei,
+            cast::transmute(5 * mem::size_of::<GLfloat>() as GLsizeiptr));
     }
 
-    let uni_color = unsafe {
-        "triangle_color".with_c_str(|ptr| gl::GetUniformLocation(program1, ptr))
-    };
+    // let uni_color = unsafe {
+    //     "triangle_color".with_c_str(|ptr| gl::GetUniformLocation(program1.name, ptr))
+    // };
 
     let mut textures = vec!(0, 0);
     unsafe { gl::GenTextures(2, textures.as_mut_ptr()); }
@@ -518,7 +645,9 @@ static VERTEX_DATA: [GLfloat, ..56] = [
                            pixels.as_ptr() as *GLvoid);
         }
     });
-    unsafe { "texKitten".with_c_str(|ptr| gl::Uniform1i(gl::GetUniformLocation(program1, ptr), 0)) };
+    unsafe {
+        program1.set_uniform(&tex_kitten_g, 0i32);
+    }
 
 
     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
@@ -542,7 +671,10 @@ static VERTEX_DATA: [GLfloat, ..56] = [
                            pixels.as_ptr() as *GLvoid);
         }
     });
-    unsafe { "texPuppy".with_c_str(|ptr| gl::Uniform1i(gl::GetUniformLocation(program1, ptr), 1)) };
+
+    unsafe {
+        program1.set_uniform(&tex_puppy_g, 1i32);
+    }
 
     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
@@ -580,7 +712,7 @@ static VERTEX_DATA: [GLfloat, ..56] = [
         // gl::Uniform3f(uni_color, 1.0, 0.0, 0.0);
 
         let time = time::precise_time_s();
-        gl::Uniform3f(uni_color, ((time+4.0).sin() as f32 + 1.0)/2.0, 0.0, 0.0);
+        // gl::Uniform3f(uni_color, ((time+4.0).sin() as f32 + 1.0)/2.0, 0.0, 0.0);
 
         gl::ClearColor(0.3, 0.3, 0.3, 1.0);
         gl::Clear(gl::COLOR_BUFFER_BIT);
@@ -602,16 +734,14 @@ static VERTEX_DATA: [GLfloat, ..56] = [
         // let result = trans.mul_v(&Vector4::new(1.0, 0.0, 0.0, 1.0));
         // println!("{:f}, {:f}, {:f}", result.x, result.y, result.z);
         unsafe {
-            let uni_trans = 
-                "model".with_c_str(|ptr| gl::GetUniformLocation(program1, ptr));
-            gl::UniformMatrix4fv(uni_trans, 1, gl::FALSE, cast::transmute(&trans));
+            let uni_trans =  program1.uniform_location(&model_g);
+            gl::UniformMatrix4fv(uni_trans.name, 1, gl::FALSE, cast::transmute(&trans));
         }
 
         let view = mat::Matrix4::<f32>::identity();
         unsafe {
-            let uni_view =
-                "view".with_c_str(|ptr| gl::GetUniformLocation(program1, ptr));
-            gl::UniformMatrix4fv(uni_view, 1, gl::FALSE, cast::transmute(&view));
+            let uni_view = program1.uniform_location(&view_g);
+            gl::UniformMatrix4fv(uni_view.name, 1, gl::FALSE, cast::transmute(&view));
         }
 
         let proj = perspective(ang::deg(45.0).to_rad(),
@@ -619,9 +749,8 @@ static VERTEX_DATA: [GLfloat, ..56] = [
                                1.0,
                                10.0);
         unsafe {
-            let uni_proj =
-                "proj".with_c_str(|ptr| gl::GetUniformLocation(program1, ptr));
-            gl::UniformMatrix4fv(uni_proj, 1, gl::FALSE, cast::transmute(&proj));
+            let uni_proj = program1.uniform_location(&proj_g);
+            gl::UniformMatrix4fv(uni_proj.name, 1, gl::FALSE, cast::transmute(&proj));
         }
 
         // Draw a rectangle from the 6 vertices
