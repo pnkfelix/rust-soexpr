@@ -122,6 +122,10 @@ pub mod glsl {
                 super::compile_shader(lines.as_slice(), gl::VERTEX_SHADER);
             VertexShader { name: name }
         }
+
+        pub fn out_global(&mut self, qualifiers: &str, type_: &str, name: &str) -> Global {
+            self.global(format!("out {:s}", qualifiers), type_, name)
+        }
     }
 
     impl FragmentShaderBuilder {
@@ -132,6 +136,10 @@ pub mod glsl {
             let name =
                 super::compile_shader(lines.as_slice(), gl::FRAGMENT_SHADER);
             FragmentShader { name: name }
+        }
+
+        pub fn in_global(&mut self, qualifiers: &str, g: &Global) -> Global {
+            self.global(format!("in {:s}", qualifiers), g.type_, g.name)
         }
     }
 
@@ -417,8 +425,8 @@ static VERTEX_DATA: [GLfloat, ..56] = [
     vs.global("in", "vec3", "color");
     vs.global("in", "vec2", "texcoord");
 
-    vs.global("out", "vec3", "v2f_color");
-    vs.global("out", "vec2", "v2f_texcoord");
+    let v2f_color    = vs.out_global("", "vec3", "v2f_color");
+    let v2f_texcoord = vs.out_global("", "vec2", "v2f_texcoord");
 
     vs.global("uniform", "mat4", "model");
     vs.global("uniform", "mat4", "view");
@@ -431,8 +439,8 @@ static VERTEX_DATA: [GLfloat, ..56] = [
               );
 
     let mut fs : glsl::FragmentShaderBuilder = ShaderBuilder::new_150core();
-    fs.global("in", "vec3", "v2f_color");
-    fs.global("in", "vec2", "v2f_texcoord");
+    fs.in_global("", &v2f_color);
+    fs.in_global("", &v2f_texcoord);
     fs.global("out", "vec4", "out_color");
     fs.global("uniform", "sampler2D", "texKitten");
     fs.global("uniform", "sampler2D", "texPuppy");
