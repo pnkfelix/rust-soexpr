@@ -885,7 +885,12 @@ static VERTEX_DATA: VERTEX_DATA_TYPE = [
 
         // Draw a rectangle from the 6 vertices
         // gl::DrawArrays(gl::TRIANGLES, 0, 6);
-        unsafe { gl::DrawElements(gl::TRIANGLES, 12, gl::UNSIGNED_INT, ptr::null()); }
+        unsafe { gl::DrawElements(gl::TRIANGLES,
+                                  12,
+                                  gl::UNSIGNED_INT,
+                                  // ptr::null()
+                                  ebo as *GLvoid
+                                  ); }
 
         win.gl_swap_window();
     }
