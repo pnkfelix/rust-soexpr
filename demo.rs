@@ -104,19 +104,34 @@ pub mod glsl {
         pub name: GLuint,
     }
 
-    #[allow(dead_code)]
-    struct FragmentShaderBuilder {
+    pub struct FragmentShader {
+        pub name: GLuint,
+    }
+
+    pub struct FragmentShaderBuilder {
         header: ~str,
         lines: Vec<~str>
     }
 
     impl VertexShaderBuilder {
         pub fn compile(&self) -> VertexShader {
+            // println!("compiling VS: {:s}", self.lines.concat());
             let lines : Vec<_> =
                 self.lines.iter().map(|s|s.as_slice()).collect();
             let name =
                 super::compile_shader(lines.as_slice(), gl::VERTEX_SHADER);
             VertexShader { name: name }
+        }
+    }
+
+    impl FragmentShaderBuilder {
+        pub fn compile(&self) -> FragmentShader {
+            // println!("compiling FS: {:s}", self.lines.concat());
+            let lines : Vec<_> =
+                self.lines.iter().map(|s|s.as_slice()).collect();
+            let name =
+                super::compile_shader(lines.as_slice(), gl::FRAGMENT_SHADER);
+            FragmentShader { name: name }
         }
     }
 
@@ -126,6 +141,13 @@ pub mod glsl {
     }
 
     pub trait ShaderBuilder {
+        /// use via e.g. VertexShaderBuilder::new("#version 150 core")
+        fn new<S:Str>(version_string: S) -> Self;
+
+        fn new_150core() -> Self {
+            ShaderBuilder::new("#version 150 core")
+        }
+
         fn clear(&mut self);
         fn push<S:Str>(&mut self, line: S);
 
@@ -148,29 +170,45 @@ pub mod glsl {
         }
     }
 
-    impl VertexShaderBuilder {
+
+    impl ShaderBuilder for FragmentShaderBuilder {
         /// use via e.g. VertexShaderBuilder::new("#version 150 core")
-        pub fn new<S:Str>(version_string: S) -> VertexShaderBuilder {
-            let hdr = version_string.into_owned();
-            VertexShaderBuilder {
+        fn new<S:Str>(version_string: S) -> FragmentShaderBuilder {
+            let hdr = version_string.into_owned() + "\n";
+            FragmentShaderBuilder {
                 header: hdr.clone(),
                 lines: vec!(hdr),
             }
         }
 
-        pub fn new_150core() -> VertexShaderBuilder {
-            VertexShaderBuilder::new("#version 150 core\n")
-        }
-    }
-
-    impl ShaderBuilder for VertexShaderBuilder {
         fn clear(&mut self) {
             self.lines.clear();
             self.lines.push(self.header.clone());
         }
 
         fn push<S:Str>(&mut self, line: S) {
-            self.lines.push(line.into_owned())
+            self.lines.push(line.into_owned());
+            self.lines.push(~"\n");
+        }
+    }
+
+    impl ShaderBuilder for VertexShaderBuilder {
+        fn new<S:Str>(version_string: S) -> VertexShaderBuilder {
+            let hdr = version_string.into_owned() + "\n";
+            VertexShaderBuilder {
+                header: hdr.clone(),
+                lines: vec!(hdr),
+            }
+        }
+
+        fn clear(&mut self) {
+            self.lines.clear();
+            self.lines.push(self.header.clone());
+        }
+
+        fn push<S:Str>(&mut self, line: S) {
+            self.lines.push(line.into_owned());
+            self.lines.push(~"\n");
         }
     }
 
@@ -374,7 +412,7 @@ static VERTEX_DATA: [GLfloat, ..56] = [
 ];
 
     // Shader sources
-    let mut vs = glsl::VertexShaderBuilder::new_150core();
+    let mut vs : glsl::VertexShaderBuilder = ShaderBuilder::new_150core();
     vs.global("in", "vec2", "position");
     vs.global("in", "vec3", "color");
     vs.global("in", "vec2", "texcoord");
@@ -386,11 +424,11 @@ static VERTEX_DATA: [GLfloat, ..56] = [
     vs.global("uniform", "mat4", "view");
     vs.global("uniform", "mat4", "proj");
 
-    vs.def_fn("main", [], "void", &[
-        "v2f_color = color;",
-        "v2f_texcoord = texcoord;",
-        "gl_Position = model * vec4(position, 0.0, 1.0);",
-        ]);
+    vs.def_fn("main", [], "void", "
+        v2f_color = color;
+        v2f_texcoord = texcoord;
+        gl_Position = model * vec4(position, 0.0, 1.0);"
+              );
 
 #[allow(dead_code)]
 static VS_SRC: &'static str =
@@ -412,6 +450,21 @@ static VS_SRC: &'static str =
        gl_Position = model * vec4(position, 0.0, 1.0);
     }";
 
+    let mut fs : glsl::FragmentShaderBuilder = ShaderBuilder::new_150core();
+    fs.global("in", "vec3", "v2f_color");
+    fs.global("in", "vec2", "v2f_texcoord");
+    fs.global("out", "vec4", "out_color");
+    fs.global("uniform", "sampler2D", "texKitten");
+    fs.global("uniform", "sampler2D", "texPuppy");
+    fs.def_fn("main", [], "void", "
+        vec4 colKitten = texture(texKitten, v2f_texcoord);
+        vec4 colPuppy  = texture(texPuppy, v2f_texcoord);
+        out_color = mix(colKitten, colPuppy, 0.5) * vec4(v2f_color, 1.0);
+        // out_color = colKitten * vec4(v2f_color, 1.0);
+        // out_color = mix(colKitten, colPuppy, 0.5);
+");
+
+#[allow(dead_code)]
 static FS_SRC: &'static str =
    "#version 150 core
     in vec3 v2f_color;
@@ -433,8 +486,8 @@ static FS_SRC: &'static str =
 
     // Create GLSL shaders
     let vs = vs.compile();
-    let fs = compile_shader([FS_SRC], gl::FRAGMENT_SHADER);
-    let program1 = link_program(vs.name, fs);
+    let fs = fs.compile();
+    let program1 = link_program(vs.name, fs.name);
 
     let mut vao;
     let mut vbo;
