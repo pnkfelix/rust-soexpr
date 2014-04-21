@@ -484,6 +484,7 @@ impl Drop for VertexArrays {
 
 struct VertexBuffers {
     names: ~[GLuint],
+    init_lens: ~[Option<uint>],
 }
 
 enum BufferDataUsage {
@@ -503,8 +504,9 @@ impl VertexBuffers {
         let len = len as GLsizei;
         assert!(len > 0);
         let mut names = slice::from_elem(len as uint, 0u32);
+        let nones = slice::from_elem(len as uint, None);
         unsafe { gl::GenBuffers(len, &mut names[0]); }
-        VertexBuffers { names: names }
+        VertexBuffers { names: names, init_lens: nones }
     }
 
     fn bind_array(&mut self, idx: u32) {
@@ -522,6 +524,7 @@ impl VertexBuffers {
                            cast::transmute(&init[0]),
                            usage as GLenum);
         }
+        self.init_lens[idx] = Some(init.len());
     }
 }
 
@@ -533,8 +536,20 @@ impl Drop for VertexBuffers {
     }
 }
 
+trait ElementBufferData {
+    fn type_(&self) -> GLenum;
+}
+
+impl ElementBufferData for u8  {
+    fn type_(&self) -> GLenum { gl::UNSIGNED_BYTE  } }
+impl ElementBufferData for u16 {
+    fn type_(&self) -> GLenum { gl::UNSIGNED_SHORT } }
+impl ElementBufferData for u32 {
+    fn type_(&self) -> GLenum { gl::UNSIGNED_INT   } }
+
 struct ElementBuffers {
     names: ~[GLuint],
+    inits: ~[Option<(GLenum, GLsizei)>],
 }
 
 impl ElementBuffers {
@@ -542,24 +557,50 @@ impl ElementBuffers {
         let len = len as GLsizei;
         assert!(len > 0);
         let mut names = slice::from_elem(len as uint, 0u32);
+        let nones = slice::from_elem(len as uint, None);
         unsafe { gl::GenBuffers(len, &mut names[0]); }
-        ElementBuffers { names: names }
+        ElementBuffers { names: names, inits: nones }
     }
 
     fn bind_elements(&mut self, idx: u32) {
         gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, self.names[idx])
     }
 
-    fn bind_and_init_elements<T>(&mut self,
-                                 idx: u32,
-                                 init: &[T],
-                                 usage: BufferDataUsage) {
+    fn bind_and_init_elements<T:ElementBufferData>(&mut self,
+                                                   idx: u32,
+                                                   init: &[T],
+                                                   usage: BufferDataUsage) {
         self.bind_elements(idx);
+
+        // require positive len in part to catch bugs but mostly
+        // because extracting generic type-associated data currently
+        // requires a concrete value in Rust.  (UFCS will fix.)
+        assert!(init.len() > 0);
+
         unsafe {
             gl::BufferData(gl::ELEMENT_ARRAY_BUFFER,
                            (init.len() * mem::size_of::<T>()) as GLsizeiptr,
                            cast::transmute(&init[0]),
                            usage as GLenum);
+        }
+
+        let len = init.len() as GLsizei;
+        // This check on the other hand is and will always be necessary.
+        assert!(len >= 0);
+
+        self.inits[idx] = Some((init[0].type_(), len));
+    }
+
+    fn draw_elements(&self, idx: u32) {
+        match self.inits[idx] {
+            None => fail!("called draw_elements on uninitialized idx"),
+            Some((type_, len)) => 
+                unsafe { gl::DrawElements(gl::TRIANGLES,
+                                          len,
+                                          type_,
+                                          // ptr::null()
+                                          self.names[idx] as *GLvoid
+                                          ); }
         }
     }
 }
@@ -917,12 +958,7 @@ static VERTEX_DATA: VERTEX_DATA_TYPE = [
 
         // Draw a rectangle from the 6 vertices
         // gl::DrawArrays(gl::TRIANGLES, 0, 6);
-        unsafe { gl::DrawElements(gl::TRIANGLES,
-                                  12,
-                                  gl::UNSIGNED_INT,
-                                  // ptr::null()
-                                  ebo.names[0] as *GLvoid
-                                  ); }
+        ebo.draw_elements(0);
 
         win.gl_swap_window();
     }
