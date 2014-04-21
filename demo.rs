@@ -529,7 +529,9 @@ impl VertexBuffers {
 
 impl Drop for VertexBuffers {
     fn drop(&mut self) {
-        unsafe { gl::DeleteBuffers(self.len, self.names.as_ptr()); }
+        let len = self.names.len() as GLsizei;
+        assert!(len >= 0);
+        unsafe { gl::DeleteBuffers(len, self.names.as_ptr()); }
     }
 }
 
@@ -567,7 +569,9 @@ impl ElementBuffers {
 
 impl Drop for ElementBuffers {
     fn drop(&mut self) {
-        unsafe { gl::DeleteBuffers(self.len, self.names.as_ptr()); }
+        let len = self.names.len() as GLsizei;
+        assert!(len >= 0);
+        unsafe { gl::DeleteBuffers(len, self.names.as_ptr()); }
     }
 }
 
