@@ -793,8 +793,8 @@ fn gl() -> Result<(), ~str> {
     }
 
 // Vertex data
-type VERTEX_DATA_TYPE = [GLfloat, ..56];
-static VERTEX_DATA: VERTEX_DATA_TYPE = [
+type VertexDataType = [GLfloat, ..56];
+static VERTEX_DATA: VertexDataType = [
     // X     Y    R    G    B  Texcoords
     -1.0,  0.5, 0.5, 0.5, 0.5, 0.0, 0.0, // Top-left
      0.0,  0.5, 1.0, 0.0, 0.0, 1.0, 0.0, // Top-right
@@ -807,9 +807,9 @@ static VERTEX_DATA: VERTEX_DATA_TYPE = [
      0.5, -0.5, 1.0, 1.0, 1.0, 0.0, 0.0, // Bottom-left
 ];
 
-    type rows_type = [VertexDataRow, ..8];
-    assert_eq!(mem::size_of::<rows_type>(), mem::size_of::<VERTEX_DATA_TYPE>());
-    let rows : &rows_type = unsafe { cast::transmute(&VERTEX_DATA) };
+    type RowsType = [VertexDataRow, ..8];
+    assert_eq!(mem::size_of::<RowsType>(), mem::size_of::<VertexDataType>());
+    let rows : &RowsType = unsafe { cast::transmute(&VERTEX_DATA) };
 
     // Shader sources
     let mut vs : glsl::VertexShaderBuilder = ShaderBuilder::new_150core();
