@@ -911,28 +911,27 @@ static VERTEX_DATA: VertexDataType = [
     texture_unit0.active();
     let image = try!(surf::Surface::from_bmp(&Path::new("paris.bmp")));
     textures.bind_and_set_image_2d(1, image);
-    unsafe {
-        program1.set_uniform(&tex_kitten_g, 0i32);
-    }
-
-
-    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
-    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
-    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as GLint);
-    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as GLint);
-
+    set_misc_tex_params();
 
     texture_unit1.active();
     let image = try!(surf::Surface::from_bmp(&Path::new("bertin.bmp")));
     textures.bind_and_set_image_2d(2, image);
+    set_misc_tex_params();
+
+    fn set_misc_tex_params() {
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as GLint);
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as GLint);
+    }
+
+    unsafe {
+        program1.set_uniform(&tex_kitten_g, 0i32);
+    }
+
     unsafe {
         program1.set_uniform(&tex_puppy_g, 1i32);
     }
-
-    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
-    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
-    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as GLint);
-    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as GLint);
 
 
     let elements : Vec<GLuint> = vec!(4, 5, 6, 6, 7, 4,
