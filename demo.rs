@@ -5,8 +5,10 @@
 
 extern crate native;
 extern crate rand;
+extern crate time;
 
 extern crate sdl = "sdl2";
+extern crate gl;
 
 extern crate opengles;
 
@@ -19,6 +21,7 @@ extern crate time;
 use std::cast;
 use std::c_str;
 use std::default::Default;
+use std::libc;
 use std::mem;
 use std::os;
 use std::ptr;
@@ -52,6 +55,15 @@ use sdl::event::KeyUpEvent;
 use sdl::rect::{Rect};
 use sdl::event::MouseMotionEvent;
 
+use gl::types::{GLchar, GLint, GLuint, GLsizei, GLsizeiptr};
+use gl::types::{GLfloat};
+
+/*
+use self::high_level::{VertexArrayObj, VertexBufferObj, ElementsBufferObj,
+                       VertexShader, FragmentShader, ShaderProgram};
+use self::high_level::{TextureUnit};
+use self::high_level::{VertexAttribPointerArgsFrom, VertexAttribPointerArgs};
+*/
 #[start]
 pub fn start(argc: int, argv: **u8) -> int {
     native::start(argc, argv, main)
@@ -61,30 +73,43 @@ pub fn start(argc: int, argv: **u8) -> int {
 fn main() {
     let args = os::args();
     if args.len() >= 2 {
-        dispatch(args[0], args[1], args.slice_from(2));
+        match dispatch(args[0], args[1], args.slice_from(2)) {
+            Ok(_) => {},
+            Err(s) => fail!("dispatch failed: {}", s),
+        }
     } else {
-        default().unwrap();
+        match default() {
+            Ok(_) => {},
+            Err(s) => fail!("default failed: {}", s),
+        }
     }
 }
 
-fn dispatch(driver: &str, variant: &str, _args: &[~str]) {
-    let _invoker = format!("{} {}", driver, variant);
-    match variant {
+fn dispatch(driver: &str, variant: &str, args: &[~str]) -> Result<(), ~str> {
+    let _invoker = ||format!("{} {}", driver, variant);
+    match (variant, args.get(0)) {
 /*
         "testsprite"
-            => tests::testsprite::main(invoker, args),
+            => tests::testsprite::main(_invoker(), _args),
         "soe"
-            => tests::soe::main(invoker, args),
+            => tests::soe::main(_invoker(), _args),
 */
-        "hello"
-            => hello().unwrap(),
-        "gl"
-            => match gl() {
-                Ok(_) => {}
-                Err(s) => { fail!("gl failed: {}", s); }
-            },
-        _otherwise
-            => default().unwrap(),
+        ("gl", _) => gl(),
+/*
+        ("open_gl", _) |
+        ("open_gl_drawing", _)
+            => open_gl_drawing(),
+*/
+/*
+        ("open_gl_textures", Some(arg)) if arg.as_slice() == "colored"
+            => open_gl_textures(ColoredKitten),
+        ("open_gl_textures", Some(arg)) if arg.as_slice() == "mix"
+            => open_gl_textures(KittenPuppy),
+        ("open_gl_textures", _)
+            => open_gl_textures(ColoredKitten),
+*/
+        ("hello", _)                    => hello(),
+        _otherwise                      => default(),
     }
 }
 
@@ -1180,6 +1205,7 @@ pub fn compile_shader(src: &[&str], ty: GLenum) -> GLuint {
 
 
 
+/*
 #[cfg(solely_opengles)]
 fn gl() -> Result<(), ~str> {
     // Attempting to adapt
@@ -1304,12 +1330,608 @@ fn gl() -> Result<(), ~str> {
     }
 }
 
-fn hello() -> Result<(), ~str> {
-    static SCREEN_WIDTH:int = 640;
-    static SCREEN_HEIGHT:int = 480;
+// Tried:
+//   http://useful-linux-tips.blogspot.fr/2013/11/complete-minimal-sdl2-opengl-animation.html
+// but it uses glFrustum, which apparently has been deprecated 
+
+fn open_gl_init() -> Result<(~vid::Window,~vid::GLContext), ~str> {
+    static SCREEN_WIDTH:i32 = 800;
+    static SCREEN_HEIGHT:i32 = 600;
+
     try!(sdl::init([sdl::InitEverything]));
-    let win = try!(
-        vid::Window::new("Hello World", 100, 100, SCREEN_WIDTH, SCREEN_HEIGHT, [vid::Shown]));
+    vid::gl_set_attribute(vid::GLContextProfileMask,
+                          vid::ll::SDL_GL_CONTEXT_PROFILE_CORE as int) || fail!();
+    vid::gl_set_attribute(vid::GLContextMajorVersion, 3) || fail!();
+    vid::gl_set_attribute(vid::GLContextMinorVersion, 2) || fail!();
+
+    let (width, height) = (SCREEN_WIDTH, SCREEN_HEIGHT);
+    let win = ({
+        let (x,y) = (vid::Positioned(100), vid::Positioned(100));
+        vid::Window::new("Hello World", x, y, width, height,
+                         [ vid::OpenGL, vid::Resizable, vid::Shown])
+    }) || fail!();
+    // This line needs to come after we create the window
+    gl::load_with(vid::gl_get_proc_address);
+
+    let context : ~vid::GLContext = try!(win.gl_create_context());
+
+    Ok((win, context))
+}
+
+pub mod high_level {
+    use std::cast;
+    use std::libc;
+    use std::mem;
+    use std::os;
+    use std::ptr;
+    use std::str;
+
+    use surf = sdl::surface;
+    use pix = sdl::pixels;
+
+    use gl;
+    use gl::types::{GLchar, GLint, GLuint, GLsizei, GLsizeiptr};
+    use gl::types::{GLenum, GLboolean, GLvoid, GLfloat};
+
+    pub struct VertexArrayObj { vao: GLuint }
+    impl VertexArrayObj {
+        pub fn new() -> VertexArrayObj {
+            let mut vao : GLuint = 0;
+            unsafe {
+                gl::GenVertexArrays(1, &mut vao);
+                gl::BindVertexArray(vao);
+            }
+            VertexArrayObj { vao: vao }
+        }
+    }
+
+    pub struct VertexBufferObj { vbo: GLuint }
+    impl VertexBufferObj {
+        pub fn new() -> VertexBufferObj {
+            let mut vbo : GLuint = 0;
+            unsafe {
+                gl::GenBuffers(1, &mut vbo); // Generate 1 buffer
+            }
+            VertexBufferObj { vbo: vbo }
+        }
+
+        pub fn bind_array(&self, vertices: &[f32]) {
+            unsafe {
+                gl::BindBuffer(gl::ARRAY_BUFFER, self.vbo);
+                let vertices_size = vertices.len() * mem::size_of::<f32>();
+                gl::BufferData(gl::ARRAY_BUFFER,
+                               vertices_size as GLsizeiptr,
+                               vertices.as_ptr() as *libc::c_void,
+                               gl::STATIC_DRAW);
+            }
+        }
+    }
+
+    pub struct ElementsBufferObj { ebo: GLuint }
+    impl ElementsBufferObj {
+        pub fn new() -> ElementsBufferObj {
+            let mut ebo : GLuint = 0;
+            unsafe { gl::GenBuffers(1, &mut ebo); }
+            ElementsBufferObj { ebo: ebo }
+        }
+
+        pub fn bind_array(&self, elements: &[GLuint]) {
+            gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, self.ebo);
+            unsafe {
+                gl::BufferData(gl::ELEMENT_ARRAY_BUFFER,
+                               (mem::size_of::<GLuint>() * elements.len()) as i64,
+                               elements.as_ptr() as *libc::c_void,
+                               gl::STATIC_DRAW);
+            }
+        }
+    }
+
+    pub struct VertexShader { vertexShader: GLuint }
+    impl VertexShader {
+        pub fn new() -> VertexShader {
+            VertexShader { vertexShader: gl::CreateShader(gl::VERTEX_SHADER) }
+        }
+        pub fn source(&self, vertexSource: &str) {
+            unsafe {
+                let vertexSource = vertexSource.to_c_str();
+                vertexSource.with_ref(|p| {
+                    let tmp = ~[p];
+                    gl::ShaderSource(self.vertexShader, 1, tmp.as_ptr() as **GLchar, ptr::null());
+                    gl::CompileShader(self.vertexShader);
+                });
+                let mut status : GLint = 0;
+                gl::GetShaderiv(self.vertexShader, gl::COMPILE_STATUS, &mut status);
+                if status != gl::TRUE as GLint {
+                    let mut buffer = Vec::from_elem(512, 0 as libc::c_char);
+                    gl::GetShaderInfoLog(self.vertexShader, 512, ptr::mut_null(), buffer.as_mut_ptr());
+                    let buffer : Vec<char> = buffer.iter().map(|&c| c as u8 as char).collect();
+                    let end = buffer.iter().position(|&c|c == '\0').unwrap();
+                    fail!("vertexShader compilation failure {}", str::from_chars(buffer.slice_to(end)));
+                }
+            }
+        }
+    }
+
+    pub struct FragmentShader { fragmentShader: GLuint }
+    impl FragmentShader {
+        pub fn new() -> FragmentShader {
+            let fragmentShader = gl::CreateShader(gl::FRAGMENT_SHADER);
+            FragmentShader { fragmentShader: fragmentShader }
+        }
+        pub fn source(&self, fragmentSource: &str) {
+            unsafe {
+                let fragmentSource = fragmentSource.to_c_str();
+                fragmentSource.with_ref(|p| {
+                    let tmp = ~[p];
+                    gl::ShaderSource(self.fragmentShader, 1, tmp.as_ptr() as **GLchar, ptr::null());
+                    gl::CompileShader(self.fragmentShader);
+                });
+                let mut status : GLint = 0;
+                gl::GetShaderiv(self.fragmentShader, gl::COMPILE_STATUS, &mut status);
+                if status != gl::TRUE as GLint {
+                    let mut buffer = Vec::from_elem(512, 0 as libc::c_char);
+                    gl::GetShaderInfoLog(self.fragmentShader, 512, ptr::mut_null(), buffer.as_mut_ptr());
+                    let buffer : Vec<char> = buffer.iter().map(|&c| c as u8 as char).collect();
+                    let end = buffer.iter().position(|&c|c == '\0').unwrap();
+                    fail!("fragmentShader compilation failure {}", str::from_chars(buffer.slice_to(end)));
+                }
+            }
+        }
+    }
+
+    pub struct ShaderProgram { shaderProgram: GLuint }
+    impl ShaderProgram {
+        pub fn new() -> ShaderProgram {
+            let shaderProgram = gl::CreateProgram();
+            ShaderProgram { shaderProgram: shaderProgram }
+        }
+        pub fn attach_shaders(&self, vs: &VertexShader, fs: &FragmentShader) {
+            gl::AttachShader(self.shaderProgram, vs.vertexShader);
+            gl::AttachShader(self.shaderProgram, fs.fragmentShader);
+        }
+        pub unsafe fn bind_frag_data_location(&self, color: u32, name: &str) {
+            let name = name.to_c_str();
+            name.with_ref(|n| gl::BindFragDataLocation(self.shaderProgram, color, n));
+        }
+        pub fn link_and_use(&self) {
+            gl::LinkProgram(self.shaderProgram);
+            gl::UseProgram(self.shaderProgram);
+        }
+        pub unsafe fn get_attrib_location(&self, name: &str) -> AttribLocation {
+            let name = name.to_c_str();
+            let posAttrib = name.with_ref(|n| gl::GetAttribLocation(self.shaderProgram, n));
+            AttribLocation{ attrib: posAttrib }
+        }
+        pub unsafe fn get_uniform_location(&self, name: &str) -> UniformLocation {
+            let name = name.to_c_str();
+            let attrib = name.with_ref(|n| gl::GetUniformLocation(self.shaderProgram, n));
+            UniformLocation { attrib: attrib }
+        }
+    }
+
+    #[allow(non_camel_case_types)]
+    pub trait GL_TYPE {
+        fn tag(&self) -> GLenum; // this should be static (associated constant) but oh well
+        fn count_in_bytes(&self, count: uint) -> uint { // same here, static method
+            (count*mem::size_of::<Self>())
+        }
+    }
+
+    impl GL_TYPE for GLfloat { fn tag(&self) -> GLenum { gl::FLOAT } }
+
+    /// This assumes the input is coming from an array of T, and thus
+    /// all the offset, len, and stride can all be correctly expressed
+    /// in units of T.
+    pub struct VertexAttribPointerArgsFrom<T/*:GL_TYPE*/> {
+        pub t: T,
+        pub size: GLint,
+        pub normalized: bool,
+        pub stride: uint,
+        pub offset: uint,
+    }
+
+    pub struct VertexAttribPointerArgs {
+        pub size: GLint,
+        pub type_: GLenum,
+        pub normalized: GLboolean,
+        pub stride: GLsizei,
+        pub pointer: *GLvoid,
+    }
+
+    pub trait ToVertexAttribPointerArgs {
+        fn recompose(self) -> VertexAttribPointerArgs;
+    }
+    impl ToVertexAttribPointerArgs for VertexAttribPointerArgs {
+        fn recompose(self) -> VertexAttribPointerArgs { self }
+    }
+
+    impl<T:GL_TYPE> ToVertexAttribPointerArgs for VertexAttribPointerArgsFrom<T> {
+        fn recompose(self) -> VertexAttribPointerArgs {
+            VertexAttribPointerArgs {
+                size: self.size,
+                type_: self.t.tag(),
+                normalized: if self.normalized { gl::TRUE } else { gl::FALSE },
+                stride: self.t.count_in_bytes(self.stride) as GLsizei,
+                pointer: unsafe {
+                    cast::transmute::<uint, *gl::types::GLvoid>
+                        (self.t.count_in_bytes(self.offset)) },
+            }
+        }
+    }
+
+    impl ToVertexAttribPointerArgs for (GLint, GLenum, GLboolean, GLsizei, *GLvoid) {
+        fn recompose(self) -> VertexAttribPointerArgs {
+            let (size, type_, normalized, stride, pointer) = self;
+            VertexAttribPointerArgs {
+                size: size, type_: type_, normalized: normalized, stride: stride, pointer: pointer
+            }
+        }
+    }
+    impl ToVertexAttribPointerArgs for (GLint, GLenum, GLboolean, GLsizei) {
+        fn recompose(self) -> VertexAttribPointerArgs {
+            let (size, type_, normalized, stride) = self;
+            VertexAttribPointerArgs {
+                size: size, type_: type_, normalized: normalized, stride: stride,
+                pointer: ptr::null()
+            }
+        }
+    }
+
+    pub struct AttribLocation { attrib: GLint }
+    impl AttribLocation {
+        pub fn enable_vertex_attrib_array(&self) {
+            gl::EnableVertexAttribArray(self.attrib as GLuint);
+        }
+        pub unsafe fn vertex_attrib_pointer<A:ToVertexAttribPointerArgs>(&self, args: A) {
+            let args = args.recompose();
+            gl::VertexAttribPointer(
+                self.attrib as GLuint, args.size, args.type_, args.normalized,
+                args.stride, args.pointer);
+        }
+    }
+    pub struct UniformLocation { attrib: GLint }
+    impl UniformLocation {
+        pub fn uniform1i(&self, v0: GLint) {
+            gl::Uniform1i(self.attrib, v0);
+        }
+        pub fn uniform3f(&self, v0: GLfloat, v1: GLfloat, v2: GLfloat) {
+            gl::Uniform3f(self.attrib, v0, v1, v2);
+        }
+    }
+
+    pub fn tex_image_2d(image: &surf::Surface, level: GLint, border: GLint) {
+        let format = unsafe { (*image.get_pixel_format().raw).format };
+        let (format, xfer_type) = match format {
+            pix::ll::SDL_PIXELFORMAT_RGB444   => (gl::RGB4, gl::UNSIGNED_INT),
+            pix::ll::SDL_PIXELFORMAT_RGB555   => (gl::RGB5, gl::UNSIGNED_INT),
+            pix::ll::SDL_PIXELFORMAT_RGBA8888 => (gl::RGBA, gl::UNSIGNED_INT),
+            pix::ll::SDL_PIXELFORMAT_ARGB8888 => (gl::BGRA, gl::UNSIGNED_INT_8_8_8_8_REV),
+            _ => fail!("unhandled pixel_format in image: {:x}", format),
+        };
+        image.with_lock(|pixels| {
+            unsafe {
+                gl::TexImage2D(gl::TEXTURE_2D,                // target
+                               level,
+                               gl::RGB as GLint,              // internal format
+                               image.get_width() as GLsizei,
+                               image.get_height() as GLsizei,
+                               border,
+                               format,
+                               xfer_type,
+                               pixels.as_ptr() as *libc::c_void);
+            }
+        });
+    }
+
+    pub struct TextureUnit { glenum: GLenum }
+    impl TextureUnit {
+        pub fn from_byte(b: u8) -> TextureUnit {
+            TextureUnit { glenum: gl::TEXTURE0 + (b as GLenum) }
+        }
+        pub fn active(&self) {
+            gl::ActiveTexture(self.glenum);
+        }
+
+        pub fn with_active<A>(&self, f: || -> A) -> A {
+            let mut result : GLint = 0;
+            unsafe { gl::GetIntegerv(gl::ACTIVE_TEXTURE, &mut result); }
+            let prev = result;
+            // debug!("switching from {:x} to {:x}", prev, self.glenum);
+            self.active();
+            let res = f();
+            // debug!("switching back to {:x} from {:x} ", prev, self.glenum);
+            gl::ActiveTexture(prev as GLuint);
+            res
+        }
+    }
+}
+
+fn open_gl_drawing() -> Result<(), ~str> {
+    let (win, _context) = try!(open_gl_init());
+
+    // http://www.open.gl/context
+    // and http://open.gl/drawing
+
+    let vertices : &[f32] = &[-0.5,  0.5, 1.0, 0.0, 0.0, // tl Vertex 1 (X, Y, ..Red)
+                               0.5,  0.5, 0.0, 1.0, 0.0, // tr Vertex 2 (X, Y, ..Green)
+                               0.5, -0.5, 0.0, 0.0, 1.0, // br Vertex 3 (X, Y, ..Blue)
+                              -0.5, -0.5, 1.0, 1.0, 1.0, // bl Vertex 4 (X, Y, .. White)
+                               ];
+
+    let _vao = VertexArrayObj::new();
+
+    let vbo = VertexBufferObj::new();
+    vbo.bind_array(vertices);
+
+    let vertexSource = ~r#"
+#version 150
+
+in vec2 position;
+in vec3 color;
+
+out vec3 Color;
+
+void main()
+{
+    Color = color;
+    gl_Position = vec4(position, 0.0, 1.0);
+}
+"#;
+    let fragmentSource = ~r#"
+#version 150
+
+in vec3 Color;
+
+out vec4 outColor;
+
+void main()
+{
+    outColor = vec4(Color, 1.0);
+}
+"#;
+
+    let vertexShader = VertexShader::new();
+    vertexShader.source(vertexSource);
+
+    let fragmentShader = FragmentShader::new();
+    fragmentShader.source(fragmentSource);
+
+    let shaderProgram = ShaderProgram::new();
+    shaderProgram.attach_shaders(&vertexShader, &fragmentShader);
+    unsafe { shaderProgram.bind_frag_data_location(0, "outColor"); }
+    shaderProgram.link_and_use();
+
+    let posAttrib = unsafe { shaderProgram.get_attrib_location("position") };
+    posAttrib.enable_vertex_attrib_array();
+    unsafe {
+        posAttrib.vertex_attrib_pointer(
+            VertexAttribPointerArgsFrom {
+                t: 0.0 as GLfloat, size: 2, normalized: false, stride: 5, offset: 0 });
+    }
+    let colAttrib = unsafe { shaderProgram.get_attrib_location("color") };
+    colAttrib.enable_vertex_attrib_array();
+    unsafe {
+        colAttrib.vertex_attrib_pointer(
+            VertexAttribPointerArgsFrom {
+                t: 0.0 as GLfloat, size: 3, normalized: false, stride: 5, offset: 2 })
+    }
+
+    let uniColor = unsafe { shaderProgram.get_uniform_location("triangleColor") };
+
+    let elements : ~[GLuint] = ~[0, 1, 2, 2, 3, 0];
+    let ebo = ElementsBufferObj::new();
+    ebo.bind_array(elements);
+
+    loop {
+        let windowEvent = evt::poll_event();
+        match windowEvent {
+            QuitEvent(_) |
+            KeyUpEvent(_, _, key::EscapeKey, _, _) => break,
+            _ => {}
+        }
+
+        let time_ = time::precise_time_s() as f32;
+        uniColor.uniform3f(((time_*4.0).sin() + 1.0)/2.0, 0.0, 0.0);
+
+        // Clear the screen to black
+        gl::ClearColor(0.0f32, 0.0f32, 0.0f32, 1.0f32);
+        gl::Clear(gl::COLOR_BUFFER_BIT);
+
+        // Draw a rectangle from the two triangles from 4 distinct vertices.
+        unsafe { gl::DrawElements(gl::TRIANGLES, 6, gl::UNSIGNED_INT, ptr::null()); }
+
+        win.gl_swap_window();
+    }
+
+    Ok(())
+}
+
+enum GlTexturesVariant {
+    ColoredKitten,
+    KittenPuppy,
+}
+
+fn open_gl_textures(variant: GlTexturesVariant) -> Result<(), ~str> {
+    use Vapa = high_level::VertexAttribPointerArgs;
+    use VapaF = high_level::VertexAttribPointerArgsFrom;
+
+    let (win, _context) = try!(open_gl_init());
+
+    let vertexSource = ~r#"
+#version 150 core
+
+in vec2 position;
+in vec3 color;
+in vec2 texcoord;
+
+out vec3 Color;
+out vec2 Texcoord;
+
+void main() {
+    Color = color;
+    Texcoord = texcoord;
+    gl_Position = vec4(position, 0.0, 1.0);
+}
+"#;
+    let fragmentSource = format!(
+        "{}{}{}",
+        r#"
+#version 150 core
+
+in vec3 Color;
+in vec2 Texcoord;
+
+out vec4 outColor;
+
+uniform sampler2D texKitten;
+uniform sampler2D texPuppy;
+
+void main()
+{
+    vec4 colKitten = texture(texKitten, Texcoord);
+    vec4 colPuppy = texture(texPuppy, Texcoord);
+    "#,
+        match variant {
+            ColoredKitten => "outColor = colKitten * vec4(Color, 1.0);",
+            KittenPuppy   => "outColor = mix(colKitten, colPuppy, 0.5);"
+        },
+        r#"
+}
+"#);
+
+    let _vao = VertexArrayObj::new();
+    let vbo = VertexBufferObj::new();
+
+    let vertices : &[f32] = &[
+        // Position       Color     Texcoords
+         -0.5,  0.5, 1.0, 0.0, 0.0, 0.0, 0.0, // Top-left
+          0.5,  0.5, 0.0, 1.0, 0.0, 1.0, 0.0, // Top-right
+          0.5, -0.5, 0.0, 0.0, 1.0, 1.0, 1.0, // Bot-right
+         -0.5, -0.5, 1.0, 1.0, 1.0, 0.0, 1.0, // Bot-left
+    ];
+
+    vbo.bind_array(vertices);
+
+    let elements : ~[GLuint] = ~[0, 1, 2,
+                                 2, 3, 0];
+    let ebo = ElementsBufferObj::new();
+    ebo.bind_array(elements);
+
+    // Create and compile the vertex shader
+    let vertexShader = VertexShader::new();
+    vertexShader.source(vertexSource);
+
+    // Create and compile the fragment shader
+    let fragmentShader = FragmentShader::new();
+    fragmentShader.source(fragmentSource);
+
+    // Link the vertex and fragment shader into a shader program
+    let shaderProgram = ShaderProgram::new();
+    unsafe {
+        shaderProgram.attach_shaders(&vertexShader, &fragmentShader);
+        shaderProgram.bind_frag_data_location(0, "outColor");
+        shaderProgram.link_and_use();
+    }
+
+    // Specify the layout of the vertex data
+    let posAttrib = unsafe { shaderProgram.get_attrib_location("position") };
+    posAttrib.enable_vertex_attrib_array();
+    unsafe {
+        posAttrib.vertex_attrib_pointer(VapaF {
+            t: 0.0 as GLfloat, size: 2, normalized: false, stride: 7, offset: 0 });
+    }
+
+    let colAttrib = unsafe { shaderProgram.get_attrib_location("color") };
+    colAttrib.enable_vertex_attrib_array();
+    unsafe {
+        colAttrib.vertex_attrib_pointer(VapaF {
+            t: 0.0 as GLfloat, size: 3, normalized: false, stride: 7, offset: 2 });
+    }
+
+    let texAttrib = unsafe { shaderProgram.get_attrib_location("texcoord") };
+    texAttrib.enable_vertex_attrib_array();
+    unsafe {
+        texAttrib.vertex_attrib_pointer(VapaF {
+            t: 0.0 as GLfloat, size: 2, normalized: false, stride: 7, offset: 5 });
+    }
+
+    // Load textures
+    let mut textures : ~[GLuint] = ~[ 0, 0 ];
+    unsafe { gl::GenTextures(2, textures.as_mut_ptr()); }
+
+    let tunit0 = TextureUnit::new(0);
+    try!(tunit0.with_active(|| {
+        gl::BindTexture(gl::TEXTURE_2D, textures[0]);
+        {
+            let file = Path::new("sample.bmp");
+            let image = try!(surf::Surface::from_bmp(&file));
+            high_level::tex_image_2d(image, 0, 0);
+        }
+
+        let uniCol = unsafe { shaderProgram.get_uniform_location("texKitten") };
+        uniCol.uniform1i(0);
+
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as GLint);
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as GLint);
+        Ok(())
+    }));
+
+    let tunit1 = TextureUnit::new(1);
+    try!(tunit1.with_active(|| {
+        gl::BindTexture(gl::TEXTURE_2D, textures[1]);
+        {
+            let file = Path::new("sample2.bmp");
+            let image = try!(surf::Surface::from_bmp(&file));
+            high_level::tex_image_2d(image, 0, 0);
+        }
+
+        let uniCol = unsafe { shaderProgram.get_uniform_location("texPuppy") };
+        uniCol.uniform1i(1);
+
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as GLint);
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as GLint);
+        Ok(())
+    }));
+
+    loop {
+        let windowEvent = evt::poll_event();
+        match windowEvent {
+            QuitEvent(_) |
+            KeyUpEvent(_, _, key::EscapeKey, _, _) => break,
+            _ => {}
+        }
+
+        // Clear the screen to black
+        gl::ClearColor(0.0f32, 0.0f32, 0.0f32, 1.0f32);
+        gl::Clear(gl::COLOR_BUFFER_BIT);
+
+        // Draw a rectangle from the two triangles using 6 indices
+        unsafe { gl::DrawElements(gl::TRIANGLES, 6, gl::UNSIGNED_INT, ptr::null()); }
+
+        win.gl_swap_window();
+    }
+
+    Ok(())
+}
+*/
+
+fn hello() -> Result<(), ~str> {
+    static SCREEN_WIDTH:i32 = 640;
+    static SCREEN_HEIGHT:i32 = 480;
+    // http://www.open.gl/context/
+    try!(sdl::init([sdl::InitEverything]));
+
+    let (width, height) = (SCREEN_WIDTH, SCREEN_HEIGHT);
+    let win = try!({
+        let (x,y) = (vid::Positioned(100), vid::Positioned(100));
+        vid::Window::new("Hello World", x, y, width as int, height as int,
+                         [ vid::OpenGL, vid::Resizable, vid::Shown])
+    });
+
     let ren = try!(rend::Renderer::from_window(
         win, rend::DriverAuto, [rend::Accelerated, rend::PresentVSync]));
 

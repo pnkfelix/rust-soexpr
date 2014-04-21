@@ -38,8 +38,14 @@ soe: $(DEMO)-dbg
 gl: $(DEMO)-dbg
 	RUST_BACKTRACE=1 ./$< $@
 
+open_gl: $(DEMO)-dbg
+	RUST_BACKTRACE=1 ./$< $@
+
+open_gl_textures: $(DEMO)-dbg
+	RUST_BACKTRACE=1 ./$< $@ mix
+
 hello: $(DEMO)-dbg
-	./$< $@
+	RUST_BACKTRACE=1 ./$< $@
 
 testsprite: $(DEMO)-dbg $(DEMO)
 	./$< $@
