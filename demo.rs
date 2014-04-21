@@ -348,8 +348,6 @@ pub mod glsl {
         }
 
         pub fn out_global<T:GLSLType>(&mut self, qualifiers: &str, name: &str) -> Global<T> {
-            let dummy_t : T = Default::default();
-            let type_ = dummy_t.type_();
             self.global::<T>(format!("out {:s}", qualifiers), name)
         }
     }
