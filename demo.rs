@@ -457,7 +457,6 @@ pub mod glsl {
 }
 
 struct VertexArrays {
-    len: GLsizei,
     names: ~[GLuint],
 }
 
@@ -467,7 +466,7 @@ impl VertexArrays {
         assert!(len > 0);
         let mut names = slice::from_elem(len as uint, 0u32);
         unsafe { gl::GenVertexArrays(len, &mut names[0]) }
-        VertexArrays { len: len, names: names }
+        VertexArrays { names: names }
     }
 
     fn bind(&mut self, idx: u32) {
@@ -477,14 +476,13 @@ impl VertexArrays {
 
 impl Drop for VertexArrays {
     fn drop(&mut self) {
-        unsafe {
-            gl::DeleteVertexArrays(self.len, self.names.as_ptr());
-        }
+        let len = self.names.len() as GLsizei;
+        assert!(len >= 0);
+        unsafe { gl::DeleteVertexArrays(len, self.names.as_ptr()); }
     }
 }
 
 struct VertexBuffers {
-    len: GLsizei,
     names: ~[GLuint],
 }
 
@@ -506,7 +504,7 @@ impl VertexBuffers {
         assert!(len > 0);
         let mut names = slice::from_elem(len as uint, 0u32);
         unsafe { gl::GenBuffers(len, &mut names[0]); }
-        VertexBuffers { len: len, names: names }
+        VertexBuffers { names: names }
     }
 
     fn bind_array(&mut self, idx: u32) {
@@ -536,7 +534,6 @@ impl Drop for VertexBuffers {
 }
 
 struct ElementBuffers {
-    len: GLsizei,
     names: ~[GLuint],
 }
 
@@ -546,7 +543,7 @@ impl ElementBuffers {
         assert!(len > 0);
         let mut names = slice::from_elem(len as uint, 0u32);
         unsafe { gl::GenBuffers(len, &mut names[0]); }
-        ElementBuffers { len: len, names: names }
+        ElementBuffers { names: names }
     }
 
     fn bind_elements(&mut self, idx: u32) {
