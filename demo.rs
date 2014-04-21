@@ -684,6 +684,25 @@ impl Textures {
     fn bind(&self, idx: uint, dim: TextureTarget) {
         gl::BindTexture(dim as GLenum, self.names[idx]);
     }
+
+    fn bind_and_set_image_2d(&self, idx: uint, image: &surf::Surface) {
+        self.bind(idx, Texture2D);
+        let (width, height) = (image.get_width(), image.get_height());
+        let format = image.get_pixel_format();
+        let format = sdl_format_to_gl_format_type(format);
+        image.with_lock(|pixels| {
+            unsafe {
+                gl::TexImage2D(gl::TEXTURE_2D, 0, gl::RGB as GLint,
+                               width as GLsizei, height as GLsizei,
+                               0,
+                               // gl::RGBA,
+                               format.val0(),
+                               format.val1(),
+                               pixels.as_ptr() as *GLvoid);
+            }
+        });
+
+    }
 }
 
 struct Texture {
@@ -890,20 +909,8 @@ static VERTEX_DATA: VertexDataType = [
     let texture_unit0 = TextureUnit::new(0);
     let texture_unit1 = TextureUnit::new(1);
     texture_unit0.active();
-    textures.bind(1, Texture2D);
     let image = try!(surf::Surface::from_bmp(&Path::new("paris.bmp")));
-    let (width, height) = (image.get_width(), image.get_height());
-    image.with_lock(|pixels| {
-        unsafe {
-            gl::TexImage2D(gl::TEXTURE_2D, 0, gl::RGB as i32,
-                           width as i32, height as i32,
-                           0,
-                           // gl::RGBA,
-                           gl::BGRA,
-                           gl::UNSIGNED_BYTE,
-                           pixels.as_ptr() as *GLvoid);
-        }
-    });
+    textures.bind_and_set_image_2d(1, image);
     unsafe {
         program1.set_uniform(&tex_kitten_g, 0i32);
     }
@@ -916,21 +923,8 @@ static VERTEX_DATA: VertexDataType = [
 
 
     texture_unit1.active();
-    textures.bind(2, Texture2D);
     let image = try!(surf::Surface::from_bmp(&Path::new("bertin.bmp")));
-    let (width, height) = (image.get_width(), image.get_height());
-    image.with_lock(|pixels| {
-        unsafe {
-            gl::TexImage2D(gl::TEXTURE_2D, 0, gl::RGB as i32,
-                           width as i32, height as i32,
-                           0,
-                           // gl::RGBA,
-                           gl::BGRA,
-                           gl::UNSIGNED_BYTE,
-                           pixels.as_ptr() as *GLvoid);
-        }
-    });
-
+    textures.bind_and_set_image_2d(2, image);
     unsafe {
         program1.set_uniform(&tex_puppy_g, 1i32);
     }
@@ -1013,6 +1007,56 @@ static VERTEX_DATA: VertexDataType = [
 
     return Ok(());
 }
+
+pub fn sdl_format_to_gl_format_type(f: pix::PixelFormat) -> (GLenum, GLenum) {
+    use self::pix::ll::*;
+    let flag = unsafe { (*f.raw).format };
+    match flag {
+        SDL_PIXELFORMAT_BGRA8888 => (gl::BGRA, gl::UNSIGNED_BYTE),
+
+        // FIXME: these cannot both be right.
+        SDL_PIXELFORMAT_RGBA8888 => (gl::BGRA, gl::UNSIGNED_INT_8_8_8_8_REV),
+        SDL_PIXELFORMAT_ARGB8888 => (gl::BGRA, gl::UNSIGNED_INT_8_8_8_8_REV),
+
+        SDL_PIXELFORMAT_ABGR8888 |
+        SDL_PIXELFORMAT_UNKNOWN |
+        SDL_PIXELFORMAT_INDEX1LSB |
+        SDL_PIXELFORMAT_INDEX1MSB |
+        SDL_PIXELFORMAT_INDEX4LSB |
+        SDL_PIXELFORMAT_INDEX4MSB |
+        SDL_PIXELFORMAT_INDEX8 |
+        SDL_PIXELFORMAT_RGB332 |
+        SDL_PIXELFORMAT_RGB444 |
+        SDL_PIXELFORMAT_RGB555 |
+        SDL_PIXELFORMAT_BGR555 |
+        SDL_PIXELFORMAT_ARGB4444 |
+        SDL_PIXELFORMAT_RGBA4444 |
+        SDL_PIXELFORMAT_ABGR4444 |
+        SDL_PIXELFORMAT_BGRA4444 |
+        SDL_PIXELFORMAT_ARGB1555 |
+        SDL_PIXELFORMAT_RGBA5551 |
+        SDL_PIXELFORMAT_ABGR1555 |
+        SDL_PIXELFORMAT_BGRA5551 |
+        SDL_PIXELFORMAT_RGB565 |
+        SDL_PIXELFORMAT_BGR565 |
+        SDL_PIXELFORMAT_RGB24 |
+        SDL_PIXELFORMAT_BGR24 |
+        SDL_PIXELFORMAT_RGB888 |
+        SDL_PIXELFORMAT_RGBX8888 |
+        SDL_PIXELFORMAT_BGR888 |
+        SDL_PIXELFORMAT_BGRX8888 |
+        SDL_PIXELFORMAT_ARGB2101010 |
+        SDL_PIXELFORMAT_YV12 |
+        SDL_PIXELFORMAT_IYUV |
+        SDL_PIXELFORMAT_YUY2 |
+        SDL_PIXELFORMAT_UYVY |
+        SDL_PIXELFORMAT_YVYU
+            => fail!("unhandled SDL_PixelFormatFlag 0x{:x}", flag),
+        _
+            => fail!("unknown SDL_PixelFormatFlag 0x{:x}", flag),
+    }
+}
+
 
 pub fn compile_shader(src: &[&str], ty: GLenum) -> GLuint {
     let shader = gl::CreateShader(ty);
