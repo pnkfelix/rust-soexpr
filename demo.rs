@@ -666,8 +666,10 @@ struct Textures {
     names: ~[GLuint],
 }
 
-enum TargetDim {
-    Texture1D = gl::TEXTURE_1D, Texture2D = gl::TEXTURE_2D, Texture3D = gl::TEXTURE_3D
+enum TextureTarget {
+    Texture1D = gl::TEXTURE_1D,
+    Texture2D = gl::TEXTURE_2D,
+    Texture3D = gl::TEXTURE_3D
 }
 
 impl Textures {
@@ -679,7 +681,7 @@ impl Textures {
         Textures { len: len, names: names }
     }
 
-    fn bind(&self, idx: uint, dim: TargetDim) {
+    fn bind(&self, idx: uint, dim: TextureTarget) {
         gl::BindTexture(dim as GLenum, self.names[idx]);
     }
 }
@@ -693,7 +695,7 @@ impl Texture {
         Texture { singleton: Textures::new(1) }
     }
 
-    fn bind(&self, dim: TargetDim) { self.singleton.bind(0, dim) }
+    fn bind(&self, dim: TextureTarget) { self.singleton.bind(0, dim) }
 }
 
 fn perspective<V:Primitive+Zero+One+Float+ApproxEq<V>+Mul<V,V>+PartOrdFloat<V>>(
