@@ -482,6 +482,14 @@ impl Drop for VertexArrays {
     }
 }
 
+struct VertexArray { singleton: VertexArrays }
+impl VertexArray {
+    fn new() -> VertexArray {
+        VertexArray { singleton: VertexArrays::new(1) }
+    }
+    fn bind(&mut self) { self.singleton.bind(0) }
+}
+
 struct VertexBuffers {
     names: ~[GLuint],
     init_lens: ~[Option<uint>],
@@ -533,6 +541,17 @@ impl Drop for VertexBuffers {
         let len = self.names.len() as GLsizei;
         assert!(len >= 0);
         unsafe { gl::DeleteBuffers(len, self.names.as_ptr()); }
+    }
+}
+
+struct VertexBuffer { singleton: VertexBuffers }
+impl VertexBuffer {
+    pub fn new() -> VertexBuffer {
+        VertexBuffer { singleton: VertexBuffers::new(1) }
+    }
+    fn bind_array(&mut self) { self.singleton.bind_array(0) }
+    fn bind_and_init_array<T>(&mut self, init: &[T], usage: BufferDataUsage) {
+        self.singleton.bind_and_init_array(0, init, usage)
     }
 }
 
@@ -613,6 +632,20 @@ impl Drop for ElementBuffers {
     }
 }
 
+struct ElementBuffer { singleton: ElementBuffers }
+impl ElementBuffer {
+    fn new() -> ElementBuffer {
+        ElementBuffer { singleton: ElementBuffers::new(1) }
+    }
+    fn bind_elements(&mut self) { self.singleton.bind_elements(0) }
+    fn bind_and_init_elements<T:ElementBufferData>(&mut self,
+                                                   init: &[T],
+                                                   usage: BufferDataUsage) {
+        self.singleton.bind_and_init_elements(0, init, usage)
+    }
+    fn draw_elements(&self) { self.singleton.draw_elements(0) }
+}
+
 struct TextureUnit {
     idx: GLuint
 }
@@ -651,6 +684,17 @@ impl Textures {
     }
 }
 
+struct Texture {
+    singleton: Textures
+}
+
+impl Texture {
+    fn new() -> Texture {
+        Texture { singleton: Textures::new(1) }
+    }
+
+    fn bind(&self, dim: TargetDim) { self.singleton.bind(0, dim) }
+}
 
 fn perspective<V:Primitive+Zero+One+Float+ApproxEq<V>+Mul<V,V>+PartOrdFloat<V>>(
     fovy: ang::Rad<V>, aspect: V, zNear: V, zFar: V) -> mat::Matrix4<V>
@@ -808,12 +852,12 @@ static VERTEX_DATA: VERTEX_DATA_TYPE = [
 
     unsafe {
         // Create Vertex Array Object
-        vao = VertexArrays::new(1);
-        vao.bind(0);
+        vao = VertexArray::new();
+        vao.bind();
 
         // Create a Vertex Buffer Object and copy the vertex data to it
-        vbo = VertexBuffers::new(1);
-        vbo.bind_and_init_array(0, rows.slice_from(0), StaticDraw);
+        vbo = VertexBuffer::new();
+        vbo.bind_and_init_array(rows.slice_from(0), StaticDraw);
 
         // Use shader program
         program1.use_program();
@@ -897,8 +941,8 @@ static VERTEX_DATA: VERTEX_DATA_TYPE = [
 
     let elements : Vec<GLuint> = vec!(4, 5, 6, 6, 7, 4,
                                       0, 1, 2, 2, 3, 0);
-    let mut ebo = ElementBuffers::new(1);
-    ebo.bind_and_init_elements(0, elements.slice_from(0), StaticDraw);
+    let mut ebo = ElementBuffer::new();
+    ebo.bind_and_init_elements(elements.slice_from(0), StaticDraw);
 
     let loop_start_time = time::precise_time_s();
 
@@ -958,7 +1002,7 @@ static VERTEX_DATA: VERTEX_DATA_TYPE = [
 
         // Draw a rectangle from the 6 vertices
         // gl::DrawArrays(gl::TRIANGLES, 0, 6);
-        ebo.draw_elements(0);
+        ebo.draw_elements();
 
         win.gl_swap_window();
     }
