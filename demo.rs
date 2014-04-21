@@ -533,6 +533,44 @@ impl Drop for VertexBuffers {
     }
 }
 
+struct ElementBuffers {
+    len: GLsizei,
+    names: ~[GLuint],
+}
+
+impl ElementBuffers {
+    fn new(len: u32) -> ElementBuffers {
+        let len = len as GLsizei;
+        assert!(len > 0);
+        let mut names = slice::from_elem(len as uint, 0u32);
+        unsafe { gl::GenBuffers(len, &mut names[0]); }
+        ElementBuffers { len: len, names: names }
+    }
+
+    fn bind_elements(&mut self, idx: u32) {
+        gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, self.names[idx])
+    }
+
+    fn bind_and_init_elements<T>(&mut self,
+                                 idx: u32,
+                                 init: &[T],
+                                 usage: BufferDataUsage) {
+        self.bind_elements(idx);
+        unsafe {
+            gl::BufferData(gl::ELEMENT_ARRAY_BUFFER,
+                           (init.len() * mem::size_of::<T>()) as GLsizeiptr,
+                           cast::transmute(&init[0]),
+                           usage as GLenum);
+        }
+    }
+}
+
+impl Drop for ElementBuffers {
+    fn drop(&mut self) {
+        unsafe { gl::DeleteBuffers(self.len, self.names.as_ptr()); }
+    }
+}
+
 struct TextureUnit {
     idx: GLuint
 }
@@ -817,15 +855,8 @@ static VERTEX_DATA: VERTEX_DATA_TYPE = [
 
     let elements : Vec<GLuint> = vec!(4, 5, 6, 6, 7, 4,
                                       0, 1, 2, 2, 3, 0);
-    let mut ebo = 0;
-    unsafe {
-        gl::GenBuffers(1, &mut ebo);
-        gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, ebo);
-        gl::BufferData(gl::ELEMENT_ARRAY_BUFFER,
-                       (elements.len() * mem::size_of::<GLuint>()) as GLsizeiptr,
-                       elements.as_ptr() as *GLvoid,
-                       gl::STATIC_DRAW);
-    }
+    let mut ebo = ElementBuffers::new(1);
+    ebo.bind_and_init_elements(0, elements.slice_from(0), StaticDraw);
 
     let loop_start_time = time::precise_time_s();
 
@@ -889,7 +920,7 @@ static VERTEX_DATA: VERTEX_DATA_TYPE = [
                                   12,
                                   gl::UNSIGNED_INT,
                                   // ptr::null()
-                                  ebo as *GLvoid
+                                  ebo.names[0] as *GLvoid
                                   ); }
 
         win.gl_swap_window();
