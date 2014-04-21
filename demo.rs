@@ -907,7 +907,7 @@ static VERTEX_DATA: VertexDataType = [
     fs.def_fn("main", [], "void", "
         vec4 colKitten = texture(texKitten, v2f_texcoord);
         vec4 colPuppy  = texture(texPuppy, v2f_texcoord);
-        out_color = mix(colKitten, colPuppy, 0.5) * vec4(v2f_color, 1.0);
+        out_color = mix(colKitten, colPuppy.rgba, 0.5) * vec4(v2f_color, 1.0);
         // out_color = colKitten * vec4(v2f_color, 1.0);
         // out_color = mix(colKitten, colPuppy, 0.5);"
               );
