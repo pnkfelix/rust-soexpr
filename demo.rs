@@ -650,6 +650,18 @@ struct TextureUnit {
     idx: GLuint
 }
 
+impl glsl::UniformArg for TextureUnit {
+    fn set_at_location(&self, location: GLint) {
+        // even though the various TEXTURE_UNIT's are typed as GLenum
+        // (== c_uint) and conceptually are somewhat like GLuint, the
+        // only glUniform* call that works with them is glUniform1i.
+        //
+        // It may be worth considering changing gl-rs to type TEXTURE*
+        // and MAX_COMBINED_TEXTURE_IMAGE_UNITS as GLint instead.
+        gl::Uniform1i(location, self.idx as GLint);
+    }
+}
+
 impl TextureUnit {
     fn new(idx: GLuint) -> TextureUnit {
         assert!(idx < gl::MAX_COMBINED_TEXTURE_IMAGE_UNITS);
@@ -904,10 +916,12 @@ static VERTEX_DATA: VertexDataType = [
     //     "triangle_color".with_c_str(|ptr| gl::GetUniformLocation(program1.name, ptr))
     // };
 
-    let textures = Textures::new(3);
+    let textures = Textures::new(5);
 
     let texture_unit0 = TextureUnit::new(0);
     let texture_unit1 = TextureUnit::new(1);
+    let texture_unit2 = TextureUnit::new(2);
+    let texture_unit3 = TextureUnit::new(3);
     texture_unit0.active();
     let image = try!(surf::Surface::from_bmp(&Path::new("paris.bmp")));
     textures.bind_and_set_image_2d(1, image);
@@ -918,6 +932,16 @@ static VERTEX_DATA: VertexDataType = [
     textures.bind_and_set_image_2d(2, image);
     set_misc_tex_params();
 
+    texture_unit2.active();
+    let image = try!(surf::Surface::from_bmp(&Path::new("kitten.bmp")));
+    textures.bind_and_set_image_2d(3, image);
+    set_misc_tex_params();
+
+    texture_unit3.active();
+    let image = try!(surf::Surface::from_bmp(&Path::new("puppy.bmp")));
+    textures.bind_and_set_image_2d(4, image);
+    set_misc_tex_params();
+
     fn set_misc_tex_params() {
         gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
         gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
@@ -926,11 +950,11 @@ static VERTEX_DATA: VertexDataType = [
     }
 
     unsafe {
-        program1.set_uniform(&tex_kitten_g, 0i32);
+        program1.set_uniform(&tex_kitten_g, texture_unit0);
     }
 
     unsafe {
-        program1.set_uniform(&tex_puppy_g, 1i32);
+        program1.set_uniform(&tex_puppy_g, texture_unit1);
     }
 
 
