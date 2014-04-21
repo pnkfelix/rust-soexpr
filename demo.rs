@@ -1,4 +1,5 @@
 #![feature(globs)]
+#![feature(macro_rules)]
 
 #![allow(unused_imports)] // don't warn me about this right now
 
@@ -99,6 +100,7 @@ pub mod glsl {
     use mat = cgmath::matrix;
 
     use std::cast;
+    use std::default::Default;
     use std::mem;
     use std::str;
 
@@ -203,6 +205,10 @@ pub mod glsl {
 
     pub trait UniformArg { fn set_at_location(&self, location: GLint); }
 
+    pub trait SettableTo<T> { }
+
+    impl<'a> SettableTo<Mat4> for &'a mat::Matrix4<f32> { }
+
     impl UniformArg for GLfloat {
         fn set_at_location(&self, location: GLint) {
             let &v0 = self; gl::Uniform1f(location, v0);
@@ -298,22 +304,24 @@ pub mod glsl {
             gl::UseProgram(self.name);
         }
 
-        pub unsafe fn attrib_location(&self, g: &Global) -> AttribLocation {
+        pub unsafe fn attrib_location<T>(&self, g: &Global<T>) -> AttribLocation {
             let name = g.name.with_c_str(|ptr| gl::GetAttribLocation(self.name, ptr));
             AttribLocation { name: name }
         }
 
-        pub unsafe fn set_uniform<U:UniformArg>(&self, g: &Global, arg: U) {
+        pub unsafe fn set_uniform
+            <T:GLSLType,U:UniformArg+SettableTo<T>>(
+                &self, g: &Global<T>, arg: U) {
             let loc = self.uniform_location(g);
             loc.uniform(arg);
         }
 
-        pub unsafe fn uniform_location(&self, g: &Global) -> UniformLocation {
+        pub unsafe fn uniform_location<T>(&self, g: &Global<T>) -> UniformLocation {
             let name = g.name.with_c_str(|ptr| gl::GetUniformLocation(self.name, ptr));
             UniformLocation { name: name }
         }
 
-        pub unsafe fn bind_frag_data_location(&self, colorNumber: GLuint, g: &Global) {
+        pub unsafe fn bind_frag_data_location<T>(&self, colorNumber: GLuint, g: &Global<T>) {
             g.name.with_c_str(|ptr| gl::BindFragDataLocation(self.name, colorNumber, ptr));
         }
 
@@ -339,8 +347,10 @@ pub mod glsl {
             VertexShader { name: name }
         }
 
-        pub fn out_global(&mut self, qualifiers: &str, type_: &str, name: &str) -> Global {
-            self.global(format!("out {:s}", qualifiers), type_, name)
+        pub fn out_global<T:GLSLType>(&mut self, qualifiers: &str, name: &str) -> Global<T> {
+            let dummy_t : T = Default::default();
+            let type_ = dummy_t.type_();
+            self.global::<T>(format!("out {:s}", qualifiers), name)
         }
     }
 
@@ -354,12 +364,37 @@ pub mod glsl {
             FragmentShader { name: name }
         }
 
-        pub fn in_global(&mut self, qualifiers: &str, g: &Global) -> Global {
-            self.global(format!("in {:s}", qualifiers), g.type_, g.name)
+        pub fn in_global<T:GLSLType>(&mut self, qualifiers: &str, g: &Global<T>) -> Global<T> {
+            self.global::<T>(format!("in {:s}", qualifiers), g.name)
         }
     }
 
-    pub struct Global {
+    // hacking around lack of associated types by making it "easy" to make
+    // dummy default values and then call (what should be) static methods
+    // on them
+    pub trait GLSLType : Default {
+        fn type_<'a>(&'a self) -> &'a str;
+    }
+
+    macro_rules! glsl_zstruct {
+        ( $RustName:ident $string:expr )
+            =>
+        {
+            pub struct $RustName;
+            impl Default for $RustName { fn default() -> $RustName { $RustName } }
+            impl GLSLType for $RustName {
+                fn type_<'a>(&'a self) -> &'a str { stringify!($string) }
+            }
+        }
+    }
+
+    glsl_zstruct!(Sampler2D sampler2D)
+    glsl_zstruct!(Vec2 vec2)
+    glsl_zstruct!(Vec3 vec3)
+    glsl_zstruct!(Vec4 vec4)
+    glsl_zstruct!(Mat4 mat4)
+
+    pub struct Global<T/*:GLSLType*/> {
         type_: ~str,
         name: ~str,
     }
@@ -375,7 +410,9 @@ pub mod glsl {
         fn clear(&mut self);
         fn push<S:Str>(&mut self, line: S);
 
-        fn global(&mut self, qualifiers: &str, type_: &str, name: &str) -> Global {
+        fn global<T:GLSLType>(&mut self, qualifiers: &str, name: &str) -> Global<T> {
+            let dummy_t : T = Default::default();
+            let type_ = dummy_t.type_();
             self.push(format!("{:s} {:s} {:s};", qualifiers, type_, name));
             Global { type_: type_.into_owned(), name: name.into_owned() }
         }
@@ -662,6 +699,8 @@ impl glsl::UniformArg for TextureUnit {
     }
 }
 
+impl glsl::SettableTo<glsl::Sampler2D> for TextureUnit { }
+
 impl TextureUnit {
     fn new(idx: GLuint) -> TextureUnit {
         assert!(idx < gl::MAX_COMBINED_TEXTURE_IMAGE_UNITS);
@@ -844,16 +883,16 @@ static VERTEX_DATA: VertexDataType = [
 
     // Shader sources
     let mut vs : glsl::VertexShaderBuilder = ShaderBuilder::new_150core();
-    let position_g = vs.global("in", "vec2", "position");
-    let color_g    = vs.global("in", "vec3", "color");
-    let texcoord_g = vs.global("in", "vec2", "texcoord");
+    let position_g = vs.global::<glsl::Vec2>("in", "position");
+    let color_g    = vs.global::<glsl::Vec3>("in", "color");
+    let texcoord_g = vs.global::<glsl::Vec2>("in", "texcoord");
 
-    let v2f_color    = vs.out_global("", "vec3", "v2f_color");
-    let v2f_texcoord = vs.out_global("", "vec2", "v2f_texcoord");
+    let v2f_color    = vs.out_global::<glsl::Vec3>("", "v2f_color");
+    let v2f_texcoord = vs.out_global::<glsl::Vec2>("", "v2f_texcoord");
 
-    let model_g = vs.global("uniform", "mat4", "model");
-    let view_g  = vs.global("uniform", "mat4", "view");
-    let proj_g  = vs.global("uniform", "mat4", "proj");
+    let model_g = vs.global::<glsl::Mat4>("uniform", "model");
+    let view_g  = vs.global::<glsl::Mat4>("uniform", "view");
+    let proj_g  = vs.global::<glsl::Mat4>("uniform", "proj");
 
     vs.def_fn("main", [], "void", "
         v2f_color = color;
@@ -864,9 +903,9 @@ static VERTEX_DATA: VertexDataType = [
     let mut fs : glsl::FragmentShaderBuilder = ShaderBuilder::new_150core();
     fs.in_global("", &v2f_color);
     fs.in_global("", &v2f_texcoord);
-    let out_color_g  = fs.global("out", "vec4", "out_color");
-    let tex_kitten_g = fs.global("uniform", "sampler2D", "texKitten");
-    let tex_puppy_g  = fs.global("uniform", "sampler2D", "texPuppy");
+    let out_color_g  = fs.global::<glsl::Vec4>("out", "out_color");
+    let tex_kitten_g = fs.global::<glsl::Sampler2D>("uniform", "texKitten");
+    let tex_puppy_g  = fs.global::<glsl::Sampler2D>("uniform", "texPuppy");
     fs.def_fn("main", [], "void", "
         vec4 colKitten = texture(texKitten, v2f_texcoord);
         vec4 colPuppy  = texture(texPuppy, v2f_texcoord);
