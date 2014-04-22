@@ -948,6 +948,8 @@ fn glsl_cookbook() -> Result<(), ~str> {
 
 
         vba.bind();
+
+        gl::Clear(gl::COLOR_BUFFER_BIT);
         gl::DrawArrays(gl::TRIANGLES, 0, 3);
 
         win.gl_swap_window();
