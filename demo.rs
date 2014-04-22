@@ -133,6 +133,10 @@ pub mod glsl {
         name: GLuint,
     }
 
+    pub struct ProgramBuilder {
+        name: GLuint,
+    }
+
     pub struct Program {
         name: GLuint,
     }
@@ -329,22 +333,34 @@ pub mod glsl {
         }
     }
 
-    impl Program {
-        pub fn new(vs: &VertexShader, fs: &FragmentShader) -> Program {
+    impl ProgramBuilder {
+        pub fn new(vs: &VertexShader, fs: &FragmentShader) -> ProgramBuilder {
             let program = gl::CreateProgram();
             gl::AttachShader(program, vs.name);
             gl::AttachShader(program, fs.name);
-            Program { name: program }
+            ProgramBuilder { name: program }
         }
 
-        pub fn new_link(vs: &VertexShader, fs: &FragmentShader) -> Program {
-            let program = Program::new(vs, fs);
-            program.link();
-            program
-        }
-
-        pub fn link(&self) {
+        pub fn link(self) -> Program {
             super::link_program(self.name);
+            Program { name: self.name }
+        }
+
+        pub fn bind_attrib_location<T:GLSLType>(&self, l: &AttribLocation<T>, g: &Global<T>) {
+            g.name.with_c_str(|ptr| unsafe {
+                gl::BindAttribLocation(self.name, l.name as GLuint, ptr)
+            });
+        }
+
+        pub unsafe fn bind_frag_data_location<T>(&self, colorNumber: GLuint, g: &Global<T>) {
+            g.name.with_c_str(|ptr| gl::BindFragDataLocation(self.name, colorNumber, ptr));
+        }
+    }
+
+    impl Program {
+        pub fn new(vs: &VertexShader, fs: &FragmentShader) -> Program {
+            let program = ProgramBuilder::new(vs, fs);
+            program.link()
         }
 
         pub fn use_program(&self) {
@@ -354,12 +370,6 @@ pub mod glsl {
         pub unsafe fn attrib_location<T:GLSLType>(&self, g: &Global<T>) -> AttribLocation<T> {
             let name = g.name.with_c_str(|ptr| gl::GetAttribLocation(self.name, ptr));
             AttribLocation { name: name }
-        }
-
-        pub fn bind_attrib_location<T:GLSLType>(&self, l: &AttribLocation<T>, g: &Global<T>) {
-            g.name.with_c_str(|ptr| unsafe {
-                gl::BindAttribLocation(self.name, l.name as GLuint, ptr)
-            });
         }
 
         pub unsafe fn set_uniform
@@ -373,11 +383,6 @@ pub mod glsl {
             let name = g.name.with_c_str(|ptr| gl::GetUniformLocation(self.name, ptr));
             UniformLocation { name: name }
         }
-
-        pub unsafe fn bind_frag_data_location<T>(&self, colorNumber: GLuint, g: &Global<T>) {
-            g.name.with_c_str(|ptr| gl::BindFragDataLocation(self.name, colorNumber, ptr));
-        }
-
     }
 
     pub struct VertexShaderBuilder {
@@ -914,7 +919,7 @@ fn glsl_cookbook() -> Result<(), ~str> {
 
     let fs = fs.compile();
 
-    let program = glsl::Program::new_link(&vs, &fs);
+    let program = glsl::ProgramBuilder::new(&vs, &fs);
 
     // "Sending data to a shader using per-vertex attributes and vertex buffer objects"
 
@@ -952,7 +957,7 @@ fn glsl_cookbook() -> Result<(), ~str> {
         vcol_loc.vertex_attrib_pointer(gl::FALSE, glsl::Packed);
     }
 
-    program.link();
+    let program = program.link();
 
     program.use_program();
 
@@ -1107,7 +1112,7 @@ static VERTEX_DATA: VertexDataType = [
     // Create GLSL shaders
     let vs = vs.compile();
     let fs = fs.compile();
-    let program1 = glsl::Program::new_link(&vs, &fs);
+    let program1 = glsl::Program::new(&vs, &fs);
 
     let mut vao;
     let mut vbo;
@@ -1123,7 +1128,6 @@ static VERTEX_DATA: VertexDataType = [
 
         // Use shader program
         program1.use_program();
-        program1.bind_frag_data_location(0, &out_color_g);
 
         // Specify the layout of the vertex data
         let default : VertexDataRow = Default::default();
