@@ -993,9 +993,7 @@ fn glsl_cookbook() -> Result<(), ~str> {
     let attribs = program.active_attribs();
     println!("Index | Name");
     println!("------------------------------------------------");
-    for a in attribs.iter() {
-        let typ = a.ref1();
-        let name = a.ref2();
+    for &(ref _count, ref _type, ref name) in attribs.iter() {
         let loc = unsafe { program.raw_attrib_location(name.as_slice()) };
         println!("{:-5d} | {}", loc, name);
     }
@@ -1149,7 +1147,7 @@ static VERTEX_DATA: VertexDataType = [
     let mut fs : glsl::FragmentShaderBuilder = ShaderBuilder::new_150core();
     fs.in_global("", &v2f_color);
     fs.in_global("", &v2f_texcoord);
-    let out_color_g  = fs.global::<glsl::Vec4>("out", "out_color");
+    fs.global::<glsl::Vec4>("out", "out_color");
     let tex_kitten_g = fs.global::<glsl::Sampler2D>("uniform", "texKitten");
     let tex_puppy_g  = fs.global::<glsl::Sampler2D>("uniform", "texPuppy");
     fs.def_main("
