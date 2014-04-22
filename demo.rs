@@ -884,11 +884,59 @@ fn glsl_cookbook() -> Result<(), ~str> {
 
     // "Sending data to a shader using per-vertex attributes and vertex buffer objects"
     let vpos_loc = glsl::AttribLocation { name: 0 };
+    let vcol_loc = glsl::AttribLocation { name: 1 };
     program.bind_attrib_location(&vpos_loc, &vpos);
+    program.bind_attrib_location(&vcol_loc, &vcol);
+
+    let positionData : Vec<f32> = vec!(-0.8, -0.8, 0.0,
+                                        0.8, -0.8, 0.0,
+                                        0.0,  0.8, 0.0);
+    let colorData : Vec<f32> = vec!(1.0, 0.0, 0.0,
+                                    0.0, 1.0, 0.0,
+                                    0.0, 0.0, 1.0);
+
+    let mut vbos = VertexBuffers::new(2);
+    vbos.bind_and_init_array(0, positionData.slice_from(0), StaticDraw);
+    vbos.bind_and_init_array(1, colorData.slice_from(0), StaticDraw);
+
+    let mut vba = VertexArray::new();
+    vba.bind();
+    vpos_loc.enable_current_vertex_attrib_array();
+    vcol_loc.enable_current_vertex_attrib_array();
+
+    vbos.bind_array(0);
+    unsafe {
+        vpos_loc.vertex_attrib_pointer(gl::FALSE, (3 as GLint, gl::FLOAT, 0 as GLsizei, ptr::null::<GLvoid>()));
+    }
+
+    vbos.bind_array(1);
+    unsafe {
+        vcol_loc.vertex_attrib_pointer(gl::FALSE, (3 as GLint, gl::FLOAT, 0 as GLsizei, ptr::null::<GLvoid>()));
+    }
+
     program.link();
 
     program.use_program();
 
+    let loop_start_time = time::precise_time_s();
+    loop {
+        match evt::poll_event() {
+            evt::QuitEvent(_) | evt::KeyUpEvent(_, _, key::EscapeKey, _, _)
+                => break,
+            _ => {
+                let time = time::precise_time_s();
+                if (time - loop_start_time) > 5.0 {
+                    break
+                }
+            }
+        }
+
+
+        vba.bind();
+        gl::DrawArrays(gl::TRIANGLES, 0, 3);
+
+        win.gl_swap_window();
+    }
     Ok(())
 }
 
