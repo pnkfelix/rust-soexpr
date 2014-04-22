@@ -891,8 +891,8 @@ fn glsl_cookbook() -> Result<(), ~str> {
 
     // "Compiling a shader"
     let mut vs : glsl::VertexShaderBuilder = ShaderBuilder::new("#version 400");
-    let vpos = vs.global::<glsl::Vec3>("in", "VertexPosition");
-    let vcol = vs.global::<glsl::Vec3>("in", "VertexColor");
+    let vpos = vs.global::<glsl::Vec3>("layout (location = 0) in", "VertexPosition");
+    let vcol = vs.global::<glsl::Vec3>("layout (location = 1) in", "VertexColor");
 
     vs.global::<glsl::Vec3>("out", "Color");
 
@@ -914,10 +914,14 @@ fn glsl_cookbook() -> Result<(), ~str> {
     let program = glsl::Program::new_link(&vs, &fs);
 
     // "Sending data to a shader using per-vertex attributes and vertex buffer objects"
-    let vpos_loc = glsl::AttribLocation { name: 0 };
-    let vcol_loc = glsl::AttribLocation { name: 1 };
-    program.bind_attrib_location(&vpos_loc, &vpos);
-    program.bind_attrib_location(&vcol_loc, &vcol);
+
+    let vpos_loc : glsl::AttribLocation<glsl::Vec3> = glsl::AttribLocation {
+        name: 0 // implied by `layout (location = 0)`
+    };
+
+    let vcol_loc : glsl::AttribLocation<glsl::Vec3> = glsl::AttribLocation {
+        name: 1 // implied by `layout (location = 1)`
+    };
 
     let positionData : Vec<f32> = vec!(-0.8, -0.8, 0.0,
                                         0.8, -0.8, 0.0,
