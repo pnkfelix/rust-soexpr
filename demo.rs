@@ -137,7 +137,7 @@ pub mod glsl {
         name: GLuint,
     }
 
-    pub struct AttribLocation {
+    pub struct AttribLocation<T/*:GLSLType*/> {
         pub name: GLint,
     }
 
@@ -169,28 +169,25 @@ pub mod glsl {
         fn size_and_gl_type(&self) -> (GLint, GLenum) { (4, gl::FLOAT) }
     }
 
-    pub trait VertexAttribPointerRTTI {
+    pub trait VertexAttribPointerRTTI<T/*:GLSLType*/> {
         fn size(&self) -> GLint;
         fn gl_type(&self) -> GLenum;
         fn stride(&self) -> GLsizei;
         fn pointer(&self) -> *GLvoid;
     }
 
-    /// This implementation assumes data is tightly packed series of [f32, ..3]
-    impl VertexAttribPointerRTTI for Vec3 {
-        fn size(&self) -> GLint { 3 }
-        fn gl_type(&self) -> GLenum { gl::FLOAT }
-        fn stride(&self) -> GLsizei { mem::size_of::<(f32, f32, f32)>() as GLsizei }
-        fn pointer(&self) -> *GLvoid { ptr::null::<GLvoid>() }
-    }
-    impl VertexAttribPointerRTTI for Vec4 {
-        fn size(&self) -> GLint { 4 }
-        fn gl_type(&self) -> GLenum { gl::FLOAT }
-        fn stride(&self) -> GLsizei { mem::size_of::<(f32, f32, f32, f32)>() as GLsizei }
+    /// Just use this to infer the type from the source attribute, under the assumption
+    /// that the data source is (1.) tightly packed and (2.) contains no other data.
+    pub struct Packed;
+    impl<T:GLSLType> VertexAttribPointerRTTI<T> for Packed {
+        fn size(&self) -> GLint     { let d : T = Default::default(); d.count() }
+        fn gl_type(&self) -> GLenum { let d : T = Default::default(); d.gl_type() }
+        fn stride(&self) -> GLsizei { let d : T = Default::default(); d.stride() }
         fn pointer(&self) -> *GLvoid { ptr::null::<GLvoid>() }
     }
 
-    impl<'a, ROW_TYPE, TUPLE:TupleReflect> VertexAttribPointerRTTI for (&'a TUPLE, &'a ROW_TYPE) {
+    impl<'a, T, ROW_TYPE, TUPLE:TupleReflect> VertexAttribPointerRTTI<T>
+        for (&'a TUPLE, &'a ROW_TYPE) {
         fn size(&self) -> GLint {
             let &(field, _) = self;
             field.size_and_gl_type().val0()
@@ -216,18 +213,21 @@ pub mod glsl {
         }
     }
 
-    impl VertexAttribPointerRTTI for (GLint, GLenum, GLsizei, *GLvoid) {
+    impl<T> VertexAttribPointerRTTI<T> for (GLint, GLenum, GLsizei, *GLvoid) {
         fn size(&self) -> GLint { self.val0() }
         fn gl_type(&self) -> GLenum { self.val1() }
         fn stride(&self) -> GLsizei { self.val2() }
         fn pointer(&self) -> *GLvoid { self.val3() }
     }
 
-    impl AttribLocation {
+    impl<T> AttribLocation<T> {
         pub fn enable_current_vertex_attrib_array(&self) {
             gl::EnableVertexAttribArray(self.name as GLuint);
         }
-        pub unsafe fn vertex_attrib_pointer<R:VertexAttribPointerRTTI>(
+    }
+
+    impl<T:GLSLType> AttribLocation<T> {
+        pub unsafe fn vertex_attrib_pointer<R:VertexAttribPointerRTTI<T>>(
             &self, normalized: GLboolean, args: R) {
             let size = args.size();
             let type_ = args.gl_type();
@@ -351,12 +351,12 @@ pub mod glsl {
             gl::UseProgram(self.name);
         }
 
-        pub unsafe fn attrib_location<T>(&self, g: &Global<T>) -> AttribLocation {
+        pub unsafe fn attrib_location<T:GLSLType>(&self, g: &Global<T>) -> AttribLocation<T> {
             let name = g.name.with_c_str(|ptr| gl::GetAttribLocation(self.name, ptr));
             AttribLocation { name: name }
         }
 
-        pub fn bind_attrib_location<T>(&self, l: &AttribLocation, g: &Global<T>) {
+        pub fn bind_attrib_location<T:GLSLType>(&self, l: &AttribLocation<T>, g: &Global<T>) {
             g.name.with_c_str(|ptr| unsafe {
                 gl::BindAttribLocation(self.name, l.name as GLuint, ptr)
             });
@@ -425,25 +425,41 @@ pub mod glsl {
     // on them
     pub trait GLSLType : Default {
         fn type_<'a>(&'a self) -> &'a str;
+
+        // (analogous to VertexAttribPointerRTTI but a little simpler)
+        fn count(&self) -> GLint;
+        fn gl_type(&self) -> GLenum;
+        fn stride(&self) -> GLsizei;
     }
 
     macro_rules! glsl_zstruct {
-        ( $RustName:ident $string:expr )
+        ( $RustName:ident $string:expr $count:expr $glenum:expr $rep:ty)
             =>
         {
             pub struct $RustName;
             impl Default for $RustName { fn default() -> $RustName { $RustName } }
             impl GLSLType for $RustName {
                 fn type_<'a>(&'a self) -> &'a str { stringify!($string) }
+                fn count(&self) -> GLint { $count }
+                fn gl_type(&self) -> GLenum { $glenum }
+                fn stride(&self) -> GLsizei { mem::size_of::<$rep>() as GLsizei }
             }
         }
     }
 
-    glsl_zstruct!(Sampler2D sampler2D)
-    glsl_zstruct!(Vec2 vec2)
-    glsl_zstruct!(Vec3 vec3)
-    glsl_zstruct!(Vec4 vec4)
-    glsl_zstruct!(Mat4 mat4)
+    type GLfloatvec2 = (GLfloat, GLfloat);
+    type GLfloatvec3 = (GLfloat, GLfloat, GLfloat);
+    type GLfloatvec4 = (GLfloat, GLfloat, GLfloat, GLfloat);
+    type GLfloatmat4 = ((GLfloat, GLfloat, GLfloat, GLfloat),
+                        (GLfloat, GLfloat, GLfloat, GLfloat),
+                        (GLfloat, GLfloat, GLfloat, GLfloat),
+                        (GLfloat, GLfloat, GLfloat, GLfloat));
+
+    glsl_zstruct!(Sampler2D sampler2D 1 gl::INT GLint)
+    glsl_zstruct!(     Vec2 vec2      2 gl::FLOAT GLfloatvec2)
+    glsl_zstruct!(     Vec3 vec3      3 gl::FLOAT GLfloatvec3)
+    glsl_zstruct!(     Vec4 vec4      4 gl::FLOAT GLfloatvec4)
+    glsl_zstruct!(     Mat4 mat4     16 gl::FLOAT GLfloatmat4)
 
     pub struct Global<T/*:GLSLType*/> {
         type_: ~str,
@@ -921,12 +937,12 @@ fn glsl_cookbook() -> Result<(), ~str> {
 
     vbos.bind_array(0);
     unsafe {
-        vpos_loc.vertex_attrib_pointer(gl::FALSE, glsl::Vec3);
+        vpos_loc.vertex_attrib_pointer(gl::FALSE, glsl::Packed);
     }
 
     vbos.bind_array(1);
     unsafe {
-        vcol_loc.vertex_attrib_pointer(gl::FALSE, glsl::Vec3);
+        vcol_loc.vertex_attrib_pointer(gl::FALSE, glsl::Packed);
     }
 
     program.link();
