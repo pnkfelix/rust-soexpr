@@ -103,6 +103,7 @@ fn dispatch(driver: &str, variant: &str, args: &[~str]) -> Result<(), ~str> {
             => open_gl_textures(ColoredKitten),
 */
         ("hello", _)                    => hello(),
+        ("glsl-cookbook", _)            => glsl_cookbook(),
         _otherwise                      => fail!("Unrecognized variant: {}", variant),
     }
 }
@@ -314,9 +315,21 @@ pub mod glsl {
     }
 
     impl Program {
-        pub fn link(vs: &VertexShader, fs: &FragmentShader) -> Program {
-            let name = super::link_program(vs.name, fs.name);
-            Program { name: name }
+        pub fn new(vs: &VertexShader, fs: &FragmentShader) -> Program {
+            let program = gl::CreateProgram();
+            gl::AttachShader(program, vs.name);
+            gl::AttachShader(program, fs.name);
+            Program { name: program }
+        }
+
+        pub fn new_link(vs: &VertexShader, fs: &FragmentShader) -> Program {
+            let program = Program::new(vs, fs);
+            program.link();
+            program
+        }
+
+        pub fn link(&self) {
+            super::link_program(self.name);
         }
 
         pub fn use_program(&self) {
@@ -326,6 +339,12 @@ pub mod glsl {
         pub unsafe fn attrib_location<T>(&self, g: &Global<T>) -> AttribLocation {
             let name = g.name.with_c_str(|ptr| gl::GetAttribLocation(self.name, ptr));
             AttribLocation { name: name }
+        }
+
+        pub fn bind_attrib_location<T>(&self, l: &AttribLocation, g: &Global<T>) {
+            g.name.with_c_str(|ptr| unsafe {
+                gl::BindAttribLocation(self.name, l.name as GLuint, ptr)
+            });
         }
 
         pub unsafe fn set_uniform
@@ -806,6 +825,73 @@ fn perspective<V:Primitive+Zero+One+Float+ApproxEq<V>+Mul<V,V>+PartOrdFloat<V>>(
     return result;
 }
 
+fn glsl_cookbook() -> Result<(), ~str> {
+    use glsl::ShaderBuilder;
+    use glsl::TupleReflect;
+
+    let (width, height) = (800, 600);
+
+    try!(sdl::init([sdl::InitVideo]));
+
+    match vid::gl_load_library(None) {
+        Ok(()) => {},
+        Err(s) => {
+            println!("gl_load_library() failed: {}", s);
+            return Err(s)
+        }
+    }
+
+    vid::gl_set_attribute(vid::GLContextMajorVersion, 3);
+    vid::gl_set_attribute(vid::GLContextMinorVersion, 2);
+    vid::gl_set_attribute(vid::GLContextProfileMask,
+                          vid::ll::SDL_GL_CONTEXT_PROFILE_CORE as int);
+
+    let win = try!(
+        vid::Window::new("Hello World", 100, 100, width, height,
+                         [vid::Shown]));
+
+    let _ctxt = try!(win.gl_create_context());
+
+    gl::load_with(vid::gl_get_proc_address);
+
+    // "Compiling a shader"
+    let mut vs : glsl::VertexShaderBuilder = ShaderBuilder::new("#version 400");
+    let vpos = vs.global::<glsl::Vec3>("in", "VertexPosition");
+    let vcol = vs.global::<glsl::Vec3>("in", "VertexColor");
+
+    vs.global::<glsl::Vec3>("out", "Color");
+
+    vs.def_fn("main", [], "void", "
+                Color = VertexColor;
+                gl_Position = vec4( VertexPosition, 1.0 );"
+              );
+
+    let vs = vs.compile();
+
+    // "Linking a shader program"
+    let mut fs : glsl::FragmentShaderBuilder = ShaderBuilder::new("#version 400");
+    fs.global::<glsl::Vec3>("in", "Color");
+
+    fs.global::<glsl::Vec4>("out", "FragColor");
+
+    fs.def_fn("main", [], "void", "
+                FragColor = vec4(Color, 1.0);"
+              );
+
+    let fs = fs.compile();
+
+    let program = glsl::Program::new_link(&vs, &fs);
+
+    // "Sending data to a shader using per-vertex attributes and vertex buffer objects"
+    let vpos_loc = glsl::AttribLocation { name: 0 };
+    program.bind_attrib_location(&vpos_loc, &vpos);
+    program.link();
+
+    program.use_program();
+
+    Ok(())
+}
+
 fn gl() -> Result<(), ~str> {
     use glsl::ShaderBuilder;
     use glsl::TupleReflect;
@@ -934,7 +1020,7 @@ static VERTEX_DATA: VertexDataType = [
     // Create GLSL shaders
     let vs = vs.compile();
     let fs = fs.compile();
-    let program1 = glsl::Program::link(&vs, &fs);
+    let program1 = glsl::Program::new_link(&vs, &fs);
 
     let mut vao;
     let mut vbo;
@@ -1174,10 +1260,10 @@ pub fn compile_shader(src: &[&str], ty: GLenum) -> GLuint {
     shader
 }
 
-    fn link_program(vs: GLuint, fs: GLuint) -> GLuint {
-        let program = gl::CreateProgram();
-        gl::AttachShader(program, vs);
-        gl::AttachShader(program, fs);
+    fn link_program(program: GLuint) {
+        // let program = gl::CreateProgram();
+        // gl::AttachShader(program, vs);
+        // gl::AttachShader(program, fs);
         gl::LinkProgram(program);
         unsafe {
             // Get the link status
@@ -1193,7 +1279,6 @@ pub fn compile_shader(src: &[&str], ty: GLenum) -> GLuint {
                 fail!(str::from_utf8_owned(buf.move_iter().collect()));
             }
         }
-        program
     }
 
 fn hello() -> Result<(), ~str> {
