@@ -103,7 +103,7 @@ fn dispatch(driver: &str, variant: &str, args: &[~str]) -> Result<(), ~str> {
             => open_gl_textures(ColoredKitten),
 */
         ("hello", _)                    => hello(),
-        _otherwise                      => default(),
+        _otherwise                      => fail!("Unrecognized variant: {}", variant),
     }
 }
 
