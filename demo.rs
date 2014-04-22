@@ -891,8 +891,8 @@ fn glsl_cookbook() -> Result<(), ~str> {
 
     // "Compiling a shader"
     let mut vs : glsl::VertexShaderBuilder = ShaderBuilder::new("#version 400");
-    let vpos = vs.global::<glsl::Vec3>("layout (location = 0) in", "VertexPosition");
-    let vcol = vs.global::<glsl::Vec3>("layout (location = 1) in", "VertexColor");
+    vs.global::<glsl::Vec3>("layout (location = 0) in", "VertexPosition");
+    vs.global::<glsl::Vec3>("layout (location = 1) in", "VertexColor");
 
     vs.global::<glsl::Vec3>("out", "Color");
 
@@ -908,7 +908,7 @@ fn glsl_cookbook() -> Result<(), ~str> {
     // When only one fragment output variable, it is always assigned
     // to data location 0; thus use of `layout (location = ...)` is
     // redundant in that case.  But, more robust to say it explicitly.
-    let fcol = fs.global::<glsl::Vec4>("layout (location = 0) out", "FragColor");
+    fs.global::<glsl::Vec4>("layout (location = 0) out", "FragColor");
 
     fs.def_main("FragColor = vec4(Color, 1.0);");
 
