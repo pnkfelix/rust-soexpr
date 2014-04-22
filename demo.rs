@@ -929,8 +929,10 @@ fn glsl_cookbook() -> Result<(), ~str> {
 
     vs.global::<glsl::Vec3>("out", "Color");
 
+    let rot_g = vs.global::<glsl::Mat4>("uniform", "RotationMatrix");
+
     vs.def_main("Color = VertexColor;
-                 gl_Position = vec4( VertexPosition, 1.0 );");
+                 gl_Position = RotationMatrix * vec4( VertexPosition, 1.0 );");
 
     let vs = vs.compile();
 
@@ -1017,6 +1019,16 @@ fn glsl_cookbook() -> Result<(), ~str> {
         vba.bind();
 
         gl::Clear(gl::COLOR_BUFFER_BIT);
+
+        let time = time::precise_time_s();
+        let rot = &mat::Matrix3::from_angle_z(ang::deg(time as f32 * 180.0f32)
+                                              .to_rad())
+            .to_matrix4();
+
+        unsafe {
+            program.set_uniform(&rot_g, rot);
+        }
+
         gl::DrawArrays(gl::TRIANGLES, 0, 3);
 
         win.gl_swap_window();
