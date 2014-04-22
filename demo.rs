@@ -122,6 +122,7 @@ pub mod glsl {
     use std::cast;
     use std::default::Default;
     use std::mem;
+    use std::ptr;
     use std::str;
 
     pub struct VertexShader {
@@ -173,6 +174,20 @@ pub mod glsl {
         fn gl_type(&self) -> GLenum;
         fn stride(&self) -> GLsizei;
         fn pointer(&self) -> *GLvoid;
+    }
+
+    /// This implementation assumes data is tightly packed series of [f32, ..3]
+    impl VertexAttribPointerRTTI for Vec3 {
+        fn size(&self) -> GLint { 3 }
+        fn gl_type(&self) -> GLenum { gl::FLOAT }
+        fn stride(&self) -> GLsizei { mem::size_of::<(f32, f32, f32)>() as GLsizei }
+        fn pointer(&self) -> *GLvoid { ptr::null::<GLvoid>() }
+    }
+    impl VertexAttribPointerRTTI for Vec4 {
+        fn size(&self) -> GLint { 4 }
+        fn gl_type(&self) -> GLenum { gl::FLOAT }
+        fn stride(&self) -> GLsizei { mem::size_of::<(f32, f32, f32, f32)>() as GLsizei }
+        fn pointer(&self) -> *GLvoid { ptr::null::<GLvoid>() }
     }
 
     impl<'a, ROW_TYPE, TUPLE:TupleReflect> VertexAttribPointerRTTI for (&'a TUPLE, &'a ROW_TYPE) {
@@ -906,12 +921,12 @@ fn glsl_cookbook() -> Result<(), ~str> {
 
     vbos.bind_array(0);
     unsafe {
-        vpos_loc.vertex_attrib_pointer(gl::FALSE, (3 as GLint, gl::FLOAT, 0 as GLsizei, ptr::null::<GLvoid>()));
+        vpos_loc.vertex_attrib_pointer(gl::FALSE, glsl::Vec3);
     }
 
     vbos.bind_array(1);
     unsafe {
-        vcol_loc.vertex_attrib_pointer(gl::FALSE, (3 as GLint, gl::FLOAT, 0 as GLsizei, ptr::null::<GLvoid>()));
+        vcol_loc.vertex_attrib_pointer(gl::FALSE, glsl::Vec3);
     }
 
     program.link();
