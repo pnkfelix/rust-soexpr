@@ -496,6 +496,10 @@ pub mod glsl {
             content.fill(|line| { self.push(line); });
             self.push("}");
         }
+
+        fn def_main<C:ContentFiller>(&mut self, content: C) {
+            self.def_fn("main", [], "void", content)
+        }
     }
 
 
@@ -892,10 +896,8 @@ fn glsl_cookbook() -> Result<(), ~str> {
 
     vs.global::<glsl::Vec3>("out", "Color");
 
-    vs.def_fn("main", [], "void", "
-                Color = VertexColor;
-                gl_Position = vec4( VertexPosition, 1.0 );"
-              );
+    vs.def_main("Color = VertexColor;
+                 gl_Position = vec4( VertexPosition, 1.0 );");
 
     let vs = vs.compile();
 
@@ -905,9 +907,7 @@ fn glsl_cookbook() -> Result<(), ~str> {
 
     fs.global::<glsl::Vec4>("out", "FragColor");
 
-    fs.def_fn("main", [], "void", "
-                FragColor = vec4(Color, 1.0);"
-              );
+    fs.def_main("FragColor = vec4(Color, 1.0);");
 
     let fs = fs.compile();
 
@@ -1078,11 +1078,10 @@ static VERTEX_DATA: VertexDataType = [
     let view_g  = vs.global::<glsl::Mat4>("uniform", "view");
     let proj_g  = vs.global::<glsl::Mat4>("uniform", "proj");
 
-    vs.def_fn("main", [], "void", "
+    vs.def_main("
         v2f_color = color;
         v2f_texcoord = texcoord;
-        gl_Position = model * vec4(position, 0.0, 1.0);"
-              );
+        gl_Position = model * vec4(position, 0.0, 1.0);");
 
     let mut fs : glsl::FragmentShaderBuilder = ShaderBuilder::new_150core();
     fs.in_global("", &v2f_color);
@@ -1090,7 +1089,7 @@ static VERTEX_DATA: VertexDataType = [
     let out_color_g  = fs.global::<glsl::Vec4>("out", "out_color");
     let tex_kitten_g = fs.global::<glsl::Sampler2D>("uniform", "texKitten");
     let tex_puppy_g  = fs.global::<glsl::Sampler2D>("uniform", "texPuppy");
-    fs.def_fn("main", [], "void", "
+    fs.def_main("
         vec4 colKitten = texture(texKitten, v2f_texcoord);
         vec4 colPuppy  = texture(texPuppy, v2f_texcoord);
         out_color = mix(colKitten, colPuppy.rgba, 0.5) * vec4(v2f_color, 1.0);
