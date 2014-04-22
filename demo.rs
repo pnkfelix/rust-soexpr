@@ -905,7 +905,7 @@ fn glsl_cookbook() -> Result<(), ~str> {
     let mut fs : glsl::FragmentShaderBuilder = ShaderBuilder::new("#version 400");
     fs.global::<glsl::Vec3>("in", "Color");
 
-    fs.global::<glsl::Vec4>("out", "FragColor");
+    let fcol = fs.global::<glsl::Vec4>("out", "FragColor");
 
     fs.def_main("FragColor = vec4(Color, 1.0);");
 
@@ -943,6 +943,14 @@ fn glsl_cookbook() -> Result<(), ~str> {
     vbos.bind_array(1);
     unsafe {
         vcol_loc.vertex_attrib_pointer(gl::FALSE, glsl::Packed);
+    }
+
+    // When there is only one fragment output variable, one knows that
+    // it gets assigned to data location 0, and thus this call is
+    // redundant in that case.  However, more robust to just say this
+    // explicitly.
+    unsafe {
+        program.bind_frag_data_location(0, &fcol);
     }
 
     program.link();
