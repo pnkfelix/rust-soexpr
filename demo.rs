@@ -221,7 +221,7 @@ pub mod glsl {
     }
 
     impl<T> AttribLocation<T> {
-        pub fn enable_current_vertex_attrib_array(&self) {
+        pub fn enable_vertex_attrib_array(&self) {
             gl::EnableVertexAttribArray(self.name as GLuint);
         }
     }
@@ -932,8 +932,8 @@ fn glsl_cookbook() -> Result<(), ~str> {
 
     let mut vba = VertexArray::new();
     vba.bind();
-    vpos_loc.enable_current_vertex_attrib_array();
-    vcol_loc.enable_current_vertex_attrib_array();
+    vpos_loc.enable_vertex_attrib_array();
+    vcol_loc.enable_vertex_attrib_array();
 
     vbos.bind_array(0);
     unsafe {
@@ -1122,15 +1122,15 @@ static VERTEX_DATA: VertexDataType = [
         let default : VertexDataRow = Default::default();
 
         let pos_attr = program1.attrib_location(&position_g);
-        pos_attr.enable_current_vertex_attrib_array();
+        pos_attr.enable_vertex_attrib_array();
         pos_attr.vertex_attrib_pointer(gl::FALSE as GLboolean, (&default.xy, &default));
 
         let col_attr = program1.attrib_location(&color_g);
-        col_attr.enable_current_vertex_attrib_array();
+        col_attr.enable_vertex_attrib_array();
         col_attr.vertex_attrib_pointer(gl::FALSE as GLboolean, (&default.rgb, &default));
 
         let tex_attr = program1.attrib_location(&texcoord_g);
-        tex_attr.enable_current_vertex_attrib_array();
+        tex_attr.enable_vertex_attrib_array();
         tex_attr.vertex_attrib_pointer(gl::FALSE as GLboolean, (&default.texcoord, &default));
     }
 
