@@ -1021,6 +1021,7 @@ fn glsl_cookbook() -> Result<(), ~str> {
 
     // "Getting a list of active vertex input attributes and indices"
     let attribs = program.active_attribs();
+    println!("Active Attributes");
     println!("Index | Name");
     println!("------------------------------------------------");
     for &(ref _count, ref _type, ref name) in attribs.iter() {
@@ -1029,6 +1030,7 @@ fn glsl_cookbook() -> Result<(), ~str> {
     }
 
     // "Getting a list of active uniform variables"
+    println!("Active Uniform Variables");
     let uniforms = program.active_uniforms();
     println!("Location | Name");
     println!("------------------------------------------------");
