@@ -383,19 +383,24 @@ pub mod glsl {
             loc.uniform(arg);
         }
 
+        pub unsafe fn raw_uniform_location(&self, name: &str) -> GLint  {
+            name.with_c_str(|ptr| gl::GetUniformLocation(self.name, ptr))
+        }
+
         pub unsafe fn uniform_location<T>(&self, g: &Global<T>) -> UniformLocation {
-            let name = g.name.with_c_str(|ptr| gl::GetUniformLocation(self.name, ptr));
+            let name = self.raw_uniform_location(g.name);
             UniformLocation { name: name }
         }
 
+        // Returns the (size, type, name) of all active attributes
         pub fn active_attribs(&self) -> ~[(GLint, GLenum, ~str)] {
             let mut n_attribs : GLint = 0;
             unsafe { gl::GetProgramiv(self.name, gl::ACTIVE_ATTRIBUTES, &mut n_attribs); }
             let mut max_len : GLint = 0;
             unsafe { gl::GetProgramiv(self.name, gl::ACTIVE_ATTRIBUTE_MAX_LENGTH, &mut max_len); }
             let mut buf = Vec::from_elem(max_len as uint, 0u8);
-            let mut attribs = Vec::with_capacity(n_attribs as uint);
             assert!(n_attribs >= 0);
+            let mut attribs = Vec::with_capacity(n_attribs as uint);
             let n_attribs = n_attribs as GLuint;
             for i in range(0, n_attribs) {
                 let mut written: GLint = 0;
@@ -410,6 +415,31 @@ pub mod glsl {
                 attribs.push((size, typ, str::from_utf8(buf.slice_to(written)).unwrap().to_owned()));
             }
             attribs.move_iter().collect()
+        }
+
+        // Returns the (size, type, name) of all active uniform variables
+        pub fn active_uniforms(&self) -> ~[(GLint, GLenum, ~str)] {
+            let mut n_uniforms : GLint = 0;
+            unsafe { gl::GetProgramiv(self.name, gl::ACTIVE_UNIFORMS, &mut n_uniforms); }
+            let mut max_len : GLint = 0;
+            unsafe { gl::GetProgramiv(self.name, gl::ACTIVE_UNIFORM_MAX_LENGTH, &mut max_len); }
+            let mut buf = Vec::from_elem(max_len as uint, 0u8);
+            assert!(n_uniforms >= 0);
+            let mut uniforms = Vec::with_capacity(n_uniforms as uint);
+            let n_uniforms = n_uniforms as GLuint;
+            for i in range(0, n_uniforms) {
+                let mut written: GLint = 0;
+                let mut size: GLint = 0;
+                let mut typ: GLenum = 0;
+                unsafe {
+                    gl::GetActiveUniform(self.name, i, max_len, &mut written, &mut size, &mut typ,
+                                         cast::transmute(buf.as_mut_ptr()));
+                }
+                assert!(written >= 0);
+                let written = written as uint;
+                uniforms.push((size, typ, str::from_utf8(buf.slice_to(written)).unwrap().to_owned()));
+            }
+            uniforms.move_iter().collect()
         }
     }
 
@@ -996,6 +1026,15 @@ fn glsl_cookbook() -> Result<(), ~str> {
     for &(ref _count, ref _type, ref name) in attribs.iter() {
         let loc = unsafe { program.raw_attrib_location(name.as_slice()) };
         println!("{:-5d} | {}", loc, name);
+    }
+
+    // "Getting a list of active uniform variables"
+    let uniforms = program.active_uniforms();
+    println!("Location | Name");
+    println!("------------------------------------------------");
+    for &(ref _count, ref _type, ref name) in uniforms.iter() {
+        let loc = unsafe { program.raw_uniform_location(name.as_slice()) };
+        println!("{:-8d} | {}\n", loc, name);
     }
 
     program.use_program();
