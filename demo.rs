@@ -991,10 +991,10 @@ fn glsl_cookbook_2() -> Result<(), ~str> {
     let mut vs : glsl::VertexShaderBuilder = ShaderBuilder::new("#version 400");
     vs.global::<glsl::Vec3>("layout (location = 0) in", "VertexPosition");
     vs.global::<glsl::Vec3>("layout (location = 1) in", "VertexColor");
-    vs.global::<glsl::Vec3>("layout (location = 2) in", "VertexTexCoord");
+    vs.global::<glsl::Vec2>("layout (location = 2) in", "VertexTexCoord");
 
     vs.global::<glsl::Vec3>("out", "Color");
-    vs.global::<glsl::Vec3>("out", "TexCoord");
+    vs.global::<glsl::Vec2>("out", "TexCoord");
 
     vs.def_main("TexCoord = VertexTexCoord;\
                \nColor = VertexColor;\
@@ -1004,7 +1004,7 @@ fn glsl_cookbook_2() -> Result<(), ~str> {
 
     // "Linking a shader program"
     let mut fs : glsl::FragmentShaderBuilder = ShaderBuilder::new("#version 400");
-    fs.global::<glsl::Vec3>("in", "TexCoord");
+    fs.global::<glsl::Vec2>("in", "TexCoord");
     fs.global::<glsl::Vec3>("in", "Color");
 
     // When only one fragment output variable, it is always assigned
@@ -1039,7 +1039,7 @@ fn glsl_cookbook_2() -> Result<(), ~str> {
         name: 1 // implied by `layout (location = 1)`
     };
 
-    let vtex_loc : glsl::AttribLocation<glsl::Vec3> = glsl::AttribLocation {
+    let vtex_loc : glsl::AttribLocation<glsl::Vec2> = glsl::AttribLocation {
         name: 2 // implied by `layout (location = 2)`
     };
 
@@ -1057,12 +1057,12 @@ fn glsl_cookbook_2() -> Result<(), ~str> {
                                     0.0, 1.0, 0.0,
                                     0.0, 0.0, 1.0);
 
-    let textureData : Vec<f32> = vec!(1.0, 1.0, 0.0,
-                                      1.0, 0.0, 0.0,
-                                      0.0, 1.0, 0.0,
-                                      1.0, 1.0, 0.0,
-                                      1.0, 0.0, 0.0,
-                                      0.0, 1.0, 0.0);
+    let textureData : Vec<f32> = vec!(1.0, 1.0,
+                                      1.0, 0.0,
+                                      0.0, 1.0,
+                                      1.0, 1.0,
+                                      1.0, 0.0,
+                                      0.0, 1.0);
 
     let mut vbos = VertexBuffers::new(3);
     vbos.bind_and_init_array(0, positionData.slice_from(0), StaticDraw);
