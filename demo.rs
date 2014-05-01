@@ -574,12 +574,18 @@ pub mod glsl {
             Global { type_: type_.into_owned(), name: name.into_owned() }
         }
 
-        fn uniform_block(&mut self, name: &str, contents: &[(GLSLType, &str)]) {
+        fn uniform_block(&mut self,
+                         name: &str,
+                         contents: &[(GLSLType, &str)],
+                         instance_name: Option<&str>) {
             self.push(format!("uniform {:s} {}", name, "{"));
             for &(ref typ_, name) in contents.iter() {
                 self.push(format!("  {} {:s};", typ_, name));
             }
-            self.push("};");
+            match instance_name {
+                None    => self.push("};"),
+                Some(s) => self.push(format!("{:s} {:s};", "}", s)),
+            }
         }
 
         fn then<S:Str>(&mut self, line: S) {
@@ -1015,15 +1021,16 @@ fn glsl_cookbook_2() -> Result<(), ~str> {
     fs.uniform_block("BlobSettings", [(glsl::vec4, "InnerColor"),
                                       (glsl::vec4, "OuterColor"),
                                       (glsl::float, "RadiusInner"),
-                                      (glsl::float, "RadiusOuter")]);
+                                      (glsl::float, "RadiusOuter")],
+                     Some("Blob"));
 
     fs.def_main("float dx = TexCoord.x - 0.5;\
                \nfloat dy = TexCoord.y - 0.5;\
                \nfloat dist = sqrt(dx * dx + dy * dy);\
-               \n//FragColor = mix( InnerColor, OuterColor,\
-               \n//                  smoothstep( RadiusInner, RadiusOuter, dist));\
-               \nFragColor = mix( InnerColor, vec4(Color,1.0),\
-               \n                  smoothstep( RadiusInner, RadiusOuter, dist));\
+               \n//FragColor = mix( Blob.InnerColor, Blob.OuterColor,\
+               \n//                  smoothstep( Blob.RadiusInner, Blob.RadiusOuter, dist));\
+               \nFragColor = mix( Blob.InnerColor, vec4(Color,1.0),\
+               \n                  smoothstep( Blob.RadiusInner, Blob.RadiusOuter, dist));\
                \n//FragColor = vec4(Color, 1.0);\
                \n");
 
@@ -1101,7 +1108,7 @@ fn glsl_cookbook_2() -> Result<(), ~str> {
     println!("blockIndex: {} blockSize: {}", blockIndex, blockSize);
     assert!(blockSize > 0);
     let mut blockBuffer = Vec::from_elem(blockSize as uint, 0 as GLubyte);
-    let names = ["InnerColor", "OuterColor", "RadiusInner", "RadiusOuter"];
+    let names = ["BlobSettings.InnerColor", "BlobSettings.OuterColor", "BlobSettings.RadiusInner", "BlobSettings.RadiusOuter"];
     let mut indices = [0 as GLuint, ..4];
     {
         let strs : Vec<c_str::CString> = names.iter().map(|s|s.to_c_str()).collect();
