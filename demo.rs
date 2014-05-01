@@ -1022,7 +1022,7 @@ fn glsl_cookbook_2() -> Result<(), ~str> {
                \nfloat dist = sqrt(dx * dx + dy * dy);\
                \n//FragColor = mix( InnerColor, OuterColor,\
                \n//                  smoothstep( RadiusInner, RadiusOuter, dist));\
-               \nFragColor = mix( vec4(Color,1.0), OuterColor,\
+               \nFragColor = mix( InnerColor, vec4(Color,1.0),\
                \n                  smoothstep( RadiusInner, RadiusOuter, dist));\
                \n//FragColor = vec4(Color, 1.0);\
                \n");
@@ -1044,18 +1044,18 @@ fn glsl_cookbook_2() -> Result<(), ~str> {
     };
 
     let positionData : Vec<f32> = vec!(-0.8, -0.8, 0.0, // lower-left
-                                        0.0, -0.8, 0.0, // upper-left
-                                       -0.8,  0.0, 0.0, // lower-right
-                                        0.0,  0.0, 0.0, // upper-right
-                                        0.0, -0.8, 0.0, // (upper-left)
-                                       -0.8,  0.0, 0.0); // (lower-right)
+                                        0.8, -0.8, 0.0, // upper-left
+                                       -0.8,  0.8, 0.0, // lower-right
+                                        0.8,  0.8, 0.0, // upper-right
+                                        0.8, -0.8, 0.0, // (upper-left)
+                                       -0.8,  0.8, 0.0); // (lower-right)
 
     let colorData : Vec<f32> = vec!(1.0, 0.0, 0.0,
-                                    0.0, 1.0, 0.0,
-                                    0.0, 0.0, 1.0,
+                                    0.0, 0.5, 0.0,
+                                    0.0, 0.0, 0.5,
                                     0.0, 0.0, 0.0,
-                                    0.0, 1.0, 0.0,
-                                    0.0, 0.0, 1.0);
+                                    0.0, 0.5, 0.0,
+                                    0.0, 0.0, 0.5);
 
     let textureData : Vec<f32> = vec!(1.0, 1.0,
                                       1.0, 0.0,
@@ -1164,7 +1164,7 @@ fn glsl_cookbook_2() -> Result<(), ~str> {
                 => break,
             _ => {
                 let time = time::precise_time_s();
-                if (time - loop_start_time) > 5.0 {
+                if (time - loop_start_time) > 10.0 {
                     break
                 }
             }
