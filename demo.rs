@@ -345,9 +345,9 @@ pub mod glsl {
             ProgramBuilder { name: program }
         }
 
-        pub fn link(self) -> Program {
-            super::link_program(self.name);
-            Program { name: self.name }
+        pub fn link(self) -> Result<Program, ~str> {
+            super::try_link_program(self.name)
+                .map(|_| Program { name: self.name })
         }
 
         pub fn bind_attrib_location<T:ToGLSLType>(&self, l: &AttribLocation<T>, g: &Global<T>) {
@@ -364,7 +364,7 @@ pub mod glsl {
     impl Program {
         pub fn new(vs: &VertexShader, fs: &FragmentShader) -> Program {
             let program = ProgramBuilder::new(vs, fs);
-            program.link()
+            program.link().unwrap()
         }
 
         pub fn use_program(&self) {
@@ -1097,7 +1097,7 @@ fn glsl_cookbook_2() -> Result<(), ~str> {
         vtex_loc.vertex_attrib_pointer(gl::FALSE, glsl::Packed);
     }
 
-    let program = program.link();
+    let program = program.link().unwrap();
 
     // "Using uniform blocks and uniform block objects"
     let blockIndex = unsafe { "BlobSettings".with_c_str(|p|gl::GetUniformBlockIndex(program.name, p)) };
@@ -1288,7 +1288,7 @@ fn glsl_cookbook_1() -> Result<(), ~str> {
         vcol_loc.vertex_attrib_pointer(gl::FALSE, glsl::Packed);
     }
 
-    let program = program.link();
+    let program = program.link().unwrap();
 
     // "Getting a list of active vertex input attributes and indices"
     let attribs = program.active_attribs();
@@ -1716,26 +1716,32 @@ pub fn compile_shader(src: &[&str], ty: GLenum) -> GLuint {
     shader
 }
 
-    fn link_program(program: GLuint) {
-        // let program = gl::CreateProgram();
-        // gl::AttachShader(program, vs);
-        // gl::AttachShader(program, fs);
-        gl::LinkProgram(program);
-        unsafe {
-            // Get the link status
-            let mut status = gl::FALSE as GLint;
-            gl::GetProgramiv(program, gl::LINK_STATUS, &mut status);
+fn try_link_program(program: GLuint) -> Result<(), ~str> {
+    // let program = gl::CreateProgram();
+    // gl::AttachShader(program, vs);
+    // gl::AttachShader(program, fs);
+    gl::LinkProgram(program);
+    unsafe {
+        // Get the link status
+        let mut status = gl::FALSE as GLint;
+        gl::GetProgramiv(program, gl::LINK_STATUS, &mut status);
 
-            // Fail on error
-            if status != (gl::TRUE as GLint) {
-                let mut len: GLint = 0;
-                gl::GetProgramiv(program, gl::INFO_LOG_LENGTH, &mut len);
-                let mut buf = Vec::from_elem(len as uint - 1, 0u8);     // subtract 1 to skip the trailing null character
-                gl::GetProgramInfoLog(program, len, ptr::mut_null(), buf.as_mut_ptr() as *mut GLchar);
-                fail!(str::from_utf8_owned(buf.move_iter().collect()));
+        if status != (gl::TRUE as GLint) {
+            let mut len: GLint = 0;
+            gl::GetProgramiv(program, gl::INFO_LOG_LENGTH, &mut len);
+            let mut buf = Vec::from_elem(len as uint - 1, 0u8);     // subtract 1 to skip the trailing null character
+            gl::GetProgramInfoLog(program, len, ptr::mut_null(), buf.as_mut_ptr() as *mut GLchar);
+            let msg = str::from_utf8_owned(buf.move_iter().collect());
+            match msg {
+                Some(msg) => return Err(msg),
+                None => return Err(~"link failure; \
+                                     graphics driver provided malformed log"),
             }
+        } else {
+            return Ok(())
         }
     }
+}
 
 fn hello() -> Result<(), ~str> {
     static SCREEN_WIDTH:i32 = 640;
