@@ -1,5 +1,6 @@
 #![feature(globs)]
 #![feature(macro_rules)]
+#![feature(phase)]
 
 #![allow(unused_imports)] // don't warn me about this right now
 
@@ -21,6 +22,7 @@ extern crate time;
 use std::cast;
 use std::c_str;
 use std::default::Default;
+use std::fmt;
 use std::libc;
 use std::mem;
 use std::os;
@@ -81,7 +83,7 @@ fn main() {
 
 fn dispatch(driver: &str, variant: &str, args: &[~str]) -> Result<(), ~str> {
     let _invoker = ||format!("{} {}", driver, variant);
-    match (variant, args.get(0)) {
+    match (variant, args.get(0).clone()) {
 /*
         "testsprite"
             => tests::testsprite::main(_invoker(), _args),
@@ -103,7 +105,8 @@ fn dispatch(driver: &str, variant: &str, args: &[~str]) -> Result<(), ~str> {
             => open_gl_textures(ColoredKitten),
 */
         ("hello", _)                    => hello(),
-        ("glsl-cookbook", _)            => glsl_cookbook(),
+        ("glsl-cookbook", Some(s)) if "1".equiv(s) => glsl_cookbook_1(),
+        ("glsl-cookbook", Some(s)) if "2".equiv(s) => glsl_cookbook_2(),
         _otherwise                      => fail!("Unrecognized variant: {}", variant),
     }
 }
@@ -121,6 +124,7 @@ pub mod glsl {
 
     use std::cast;
     use std::default::Default;
+    use std::fmt;
     use std::mem;
     use std::ptr;
     use std::str;
@@ -141,7 +145,7 @@ pub mod glsl {
         name: GLuint,
     }
 
-    pub struct AttribLocation<T/*:GLSLType*/> {
+    pub struct AttribLocation<T/*:ToGLSLType*/> {
         pub name: GLint,
     }
 
@@ -173,7 +177,7 @@ pub mod glsl {
         fn size_and_gl_type(&self) -> (GLint, GLenum) { (4, gl::FLOAT) }
     }
 
-    pub trait VertexAttribPointerRTTI<T/*:GLSLType*/> {
+    pub trait VertexAttribPointerRTTI<T/*:ToGLSLType*/> {
         fn size(&self) -> GLint;
         fn gl_type(&self) -> GLenum;
         fn stride(&self) -> GLsizei;
@@ -183,7 +187,7 @@ pub mod glsl {
     /// Just use this to infer the type from the source attribute, under the assumption
     /// that the data source is (1.) tightly packed and (2.) contains no other data.
     pub struct Packed;
-    impl<T:GLSLType> VertexAttribPointerRTTI<T> for Packed {
+    impl<T:ToGLSLType> VertexAttribPointerRTTI<T> for Packed {
         fn size(&self) -> GLint     { let d : T = Default::default(); d.count() }
         fn gl_type(&self) -> GLenum { let d : T = Default::default(); d.gl_type() }
         fn stride(&self) -> GLsizei { let d : T = Default::default(); d.stride() }
@@ -230,7 +234,7 @@ pub mod glsl {
         }
     }
 
-    impl<T:GLSLType> AttribLocation<T> {
+    impl<T:ToGLSLType> AttribLocation<T> {
         pub unsafe fn vertex_attrib_pointer<R:VertexAttribPointerRTTI<T>>(
             &self, normalized: GLboolean, args: R) {
             let size = args.size();
@@ -346,7 +350,7 @@ pub mod glsl {
             Program { name: self.name }
         }
 
-        pub fn bind_attrib_location<T:GLSLType>(&self, l: &AttribLocation<T>, g: &Global<T>) {
+        pub fn bind_attrib_location<T:ToGLSLType>(&self, l: &AttribLocation<T>, g: &Global<T>) {
             g.name.with_c_str(|ptr| unsafe {
                 gl::BindAttribLocation(self.name, l.name as GLuint, ptr)
             });
@@ -371,13 +375,13 @@ pub mod glsl {
             name.with_c_str(|ptr| gl::GetAttribLocation(self.name, ptr))
         }
 
-        pub unsafe fn attrib_location<T:GLSLType>(&self, g: &Global<T>) -> AttribLocation<T> {
+        pub unsafe fn attrib_location<T:ToGLSLType>(&self, g: &Global<T>) -> AttribLocation<T> {
             let name = self.raw_attrib_location(g.name);
             AttribLocation { name: name }
         }
 
         pub unsafe fn set_uniform
-            <T:GLSLType,U:UniformArg+SettableTo<T>>(
+            <T:ToGLSLType,U:UniformArg+SettableTo<T>>(
                 &self, g: &Global<T>, arg: U) {
             let loc = self.uniform_location(g);
             loc.uniform(arg);
@@ -463,7 +467,7 @@ pub mod glsl {
             VertexShader { name: name }
         }
 
-        pub fn out_global<T:GLSLType>(&mut self, qualifiers: &str, name: &str) -> Global<T> {
+        pub fn out_global<T:ToGLSLType>(&mut self, qualifiers: &str, name: &str) -> Global<T> {
             self.global::<T>(format!("out {:s}", qualifiers), name)
         }
     }
@@ -478,15 +482,38 @@ pub mod glsl {
             FragmentShader { name: name }
         }
 
-        pub fn in_global<T:GLSLType>(&mut self, qualifiers: &str, g: &Global<T>) -> Global<T> {
+        pub fn in_global<T:ToGLSLType>(&mut self, qualifiers: &str, g: &Global<T>) -> Global<T> {
             self.global::<T>(format!("in {:s}", qualifiers), g.name)
+        }
+    }
+
+    #[allow(non_camel_case_types)]
+    pub enum GLSLType {
+        sampler2d,
+        vec2,
+        vec3,
+        vec4,
+        mat4,
+        float,
+    }
+
+    impl ::std::fmt::Show for GLSLType {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            write!(f.buf, "{:s}", match self {
+                &sampler2d => "sampler2d",
+                &vec2 => "vec2",
+                &vec3 => "vec3",
+                &vec4 => "vec4",
+                &mat4 => "mat4",
+                &float => "float",
+            })
         }
     }
 
     // hacking around lack of associated types by making it "easy" to make
     // dummy default values and then call (what should be) static methods
     // on them
-    pub trait GLSLType : Default {
+    pub trait ToGLSLType : Default {
         fn type_<'a>(&'a self) -> &'a str;
 
         // (analogous to VertexAttribPointerRTTI but a little simpler)
@@ -501,7 +528,7 @@ pub mod glsl {
         {
             pub struct $RustName;
             impl Default for $RustName { fn default() -> $RustName { $RustName } }
-            impl GLSLType for $RustName {
+            impl ToGLSLType for $RustName {
                 fn type_<'a>(&'a self) -> &'a str { stringify!($string) }
                 fn count(&self) -> GLint { $count }
                 fn gl_type(&self) -> GLenum { $glenum }
@@ -524,7 +551,7 @@ pub mod glsl {
     glsl_zstruct!(     Vec4 vec4      4 gl::FLOAT GLfloatvec4)
     glsl_zstruct!(     Mat4 mat4     16 gl::FLOAT GLfloatmat4)
 
-    pub struct Global<T/*:GLSLType*/> {
+    pub struct Global<T/*:ToGLSLType*/> {
         type_: ~str,
         name: ~str,
     }
@@ -540,11 +567,19 @@ pub mod glsl {
         fn clear(&mut self);
         fn push<S:Str>(&mut self, line: S);
 
-        fn global<T:GLSLType>(&mut self, qualifiers: &str, name: &str) -> Global<T> {
+        fn global<T:ToGLSLType>(&mut self, qualifiers: &str, name: &str) -> Global<T> {
             let dummy_t : T = Default::default();
             let type_ = dummy_t.type_();
             self.push(format!("{:s} {:s} {:s};", qualifiers, type_, name));
             Global { type_: type_.into_owned(), name: name.into_owned() }
+        }
+
+        fn uniform_block(&mut self, name: &str, contents: &[(GLSLType, &str)]) {
+            self.push(format!("uniform {:s} {}", name, "{"));
+            for &(ref typ_, name) in contents.iter() {
+                self.push(format!("  {} {:s};", typ_, name));
+            }
+            self.push("};");
         }
 
         fn then<S:Str>(&mut self, line: S) {
@@ -923,7 +958,236 @@ fn perspective<V:Primitive+Zero+One+Float+ApproxEq<V>+Mul<V,V>+PartOrdFloat<V>>(
     return result;
 }
 
-fn glsl_cookbook() -> Result<(), ~str> {
+fn glsl_cookbook_2() -> Result<(), ~str> {
+    use glsl::ShaderBuilder;
+    use glsl::TupleReflect;
+
+    let (width, height) = (800, 600);
+
+    try!(sdl::init([sdl::InitVideo]));
+
+    match vid::gl_load_library(None) {
+        Ok(()) => {},
+        Err(s) => {
+            println!("gl_load_library() failed: {}", s);
+            return Err(s)
+        }
+    }
+
+    vid::gl_set_attribute(vid::GLContextMajorVersion, 3);
+    vid::gl_set_attribute(vid::GLContextMinorVersion, 2);
+    vid::gl_set_attribute(vid::GLContextProfileMask,
+                          vid::ll::SDL_GL_CONTEXT_PROFILE_CORE as int);
+
+    let win = try!(
+        vid::Window::new("Hello World", 100, 100, width, height,
+                         [vid::Shown]));
+
+    let _ctxt = try!(win.gl_create_context());
+
+    gl::load_with(vid::gl_get_proc_address);
+
+    // "Compiling a shader"
+    let mut vs : glsl::VertexShaderBuilder = ShaderBuilder::new("#version 400");
+    vs.global::<glsl::Vec3>("layout (location = 0) in", "VertexPosition");
+    vs.global::<glsl::Vec3>("layout (location = 1) in", "VertexColor");
+    vs.global::<glsl::Vec3>("layout (location = 2) in", "VertexTexCoord");
+
+    vs.global::<glsl::Vec3>("out", "Color");
+    vs.global::<glsl::Vec3>("out", "TexCoord");
+
+    vs.def_main("TexCoord = VertexTexCoord;\
+               \nColor = VertexColor;\
+               \ngl_Position = vec4( VertexPosition, 1.0 );");
+
+    let vs = vs.compile();
+
+    // "Linking a shader program"
+    let mut fs : glsl::FragmentShaderBuilder = ShaderBuilder::new("#version 400");
+    fs.global::<glsl::Vec3>("in", "TexCoord");
+    fs.global::<glsl::Vec3>("in", "Color");
+
+    // When only one fragment output variable, it is always assigned
+    // to data location 0; thus use of `layout (location = ...)` is
+    // redundant in that case.  But, more robust to say it explicitly.
+    fs.global::<glsl::Vec4>("layout (location = 0) out", "FragColor");
+
+    fs.uniform_block("BlobSettings", [(glsl::vec4, "InnerColor"),
+                                      (glsl::vec4, "OuterColor"),
+                                      (glsl::float, "RadiusInner"),
+                                      (glsl::float, "RadiusOuter")]);
+
+    fs.def_main("float dx = TexCoord.x - 0.5;\
+               \nfloat dy = TexCoord.y - 0.5;\
+               \nfloat dist = sqrt(dx * dx + dy * dy);\
+               \n//FragColor = mix( InnerColor, OuterColor,\
+               \n//                  smoothstep( RadiusInner, RadiusOuter, dist));\
+               \nFragColor = mix( vec4(Color,1.0), OuterColor,\
+               \n                  smoothstep( RadiusInner, RadiusOuter, dist));\
+               \n//FragColor = vec4(Color, 1.0);\
+               \n");
+
+    let fs = fs.compile();
+
+    let program = glsl::ProgramBuilder::new(&vs, &fs);
+
+    let vpos_loc : glsl::AttribLocation<glsl::Vec3> = glsl::AttribLocation {
+        name: 0 // implied by `layout (location = 0)`
+    };
+
+    let vcol_loc : glsl::AttribLocation<glsl::Vec3> = glsl::AttribLocation {
+        name: 1 // implied by `layout (location = 1)`
+    };
+
+    let vtex_loc : glsl::AttribLocation<glsl::Vec3> = glsl::AttribLocation {
+        name: 2 // implied by `layout (location = 1)`
+    };
+
+    let positionData : Vec<f32> = vec!(-0.8, -0.8, 0.0, // lower-left
+                                        0.0, -0.8, 0.0, // upper-left
+                                       -0.8,  0.0, 0.0, // lower-right
+                                        0.0,  0.0, 0.0, // upper-right
+                                        0.0, -0.8, 0.0, // (upper-left)
+                                       -0.8,  0.0, 0.0); // (lower-right)
+
+    let colorData : Vec<f32> = vec!(1.0, 0.0, 0.0,
+                                    0.0, 1.0, 0.0,
+                                    0.0, 0.0, 1.0,
+                                    0.0, 0.0, 0.0,
+                                    0.0, 1.0, 0.0,
+                                    0.0, 0.0, 1.0);
+
+    let textureData : Vec<f32> = vec!(1.0, 1.0, 0.0,
+                                      1.0, 0.0, 1.0,
+                                      0.0, 1.0, 1.0,
+                                      1.0, 1.0, 0.0,
+                                      1.0, 0.0, 1.0,
+                                      0.0, 1.0, 1.0);
+
+    let mut vbos = VertexBuffers::new(3);
+    vbos.bind_and_init_array(0, positionData.slice_from(0), StaticDraw);
+    vbos.bind_and_init_array(1, colorData.slice_from(0), StaticDraw);
+    vbos.bind_and_init_array(2, textureData.slice_from(0), StaticDraw);
+
+    let mut vba = VertexArray::new();
+    vba.bind();
+    vpos_loc.enable_vertex_attrib_array();
+    vcol_loc.enable_vertex_attrib_array();
+    vtex_loc.enable_vertex_attrib_array();
+
+    vbos.bind_array(0);
+    unsafe {
+        vpos_loc.vertex_attrib_pointer(gl::FALSE, glsl::Packed);
+    }
+
+    vbos.bind_array(1);
+    unsafe {
+        vcol_loc.vertex_attrib_pointer(gl::FALSE, glsl::Packed);
+    }
+
+    vbos.bind_array(2);
+    unsafe {
+        vtex_loc.vertex_attrib_pointer(gl::FALSE, glsl::Packed);
+    }
+
+    let program = program.link();
+
+    // "Using uniform blocks and uniform block objects"
+    let blockIndex = unsafe { "BlobSettings".with_c_str(|p|gl::GetUniformBlockIndex(program.name, p)) };
+    let mut blockSize : GLint = 0;
+    unsafe {
+        gl::GetActiveUniformBlockiv(program.name, blockIndex, gl::UNIFORM_BLOCK_DATA_SIZE, &mut blockSize);
+    }
+    println!("blockIndex: {} blockSize: {}", blockIndex, blockSize);
+    assert!(blockSize > 0);
+    let mut blockBuffer = Vec::from_elem(blockSize as uint, 0 as GLubyte);
+    let names = ["InnerColor", "OuterColor", "RadiusInner", "RadiusOuter"];
+    let mut indices = [0 as GLuint, ..4];
+    {
+        let strs : Vec<c_str::CString> = names.iter().map(|s|s.to_c_str()).collect();
+        unsafe { gl::GetUniformIndices(program.name, indices.len() as GLint, strs.iter().map(|cs| {
+            cs.as_bytes().as_ptr() as *GLchar}).collect::<Vec<_>>().as_ptr(), indices.as_mut_ptr()); }
+    }
+    let mut offset = [0 as GLint, ..4];
+    unsafe { gl::GetActiveUniformsiv(program.name, offset.len() as GLint, indices.as_ptr(),
+                                     gl::UNIFORM_OFFSET, offset.as_mut_ptr()); }
+
+    let outerColor : [GLfloat, ..4] = [0.0, ..4];
+    let innerColor : [GLfloat, ..4] = [1.0, 1.0, 0.75, 1.0];
+    let innerRadius : GLfloat = 0.25;
+    let outerRadius : GLfloat = 0.45;
+
+    unsafe {
+        let blockBuffer = blockBuffer.as_mut_ptr() as uint;
+        println!("blockIndex: {} blockSize: {} blockBuffer: {:?} offsets: {:?}", blockIndex, blockSize, blockBuffer, offset);
+        mem::move_val_init::<[GLfloat, ..4]>(cast::transmute(blockBuffer + offset[0] as uint), innerColor);
+        mem::move_val_init::<[GLfloat, ..4]>(cast::transmute(blockBuffer + offset[1] as uint), outerColor);
+        mem::move_val_init::<GLfloat>(cast::transmute(blockBuffer + offset[2] as uint), innerRadius);
+        mem::move_val_init::<GLfloat>(cast::transmute(blockBuffer + offset[3] as uint), outerRadius);
+    }
+
+    let mut uboHandle : GLuint = 0;
+    unsafe {
+        gl::GenBuffers(1, &mut uboHandle);
+        gl::BindBuffer( gl::UNIFORM_BUFFER, uboHandle );
+        gl::BufferData( gl::UNIFORM_BUFFER, blockSize as GLsizeiptr, blockBuffer.as_mut_ptr() as *GLvoid, gl::DYNAMIC_DRAW );
+    }
+
+    gl::BindBufferBase( gl::UNIFORM_BUFFER, blockIndex, uboHandle );
+
+    // "Getting a list of active vertex input attributes and indices"
+    let attribs = program.active_attribs();
+    println!("Active Attributes");
+    println!("Index | Name");
+    println!("------------------------------------------------");
+    for &(ref _count, ref _type, ref name) in attribs.iter() {
+        let loc = unsafe { program.raw_attrib_location(name.as_slice()) };
+        println!("{:-5d} | {}", loc, name);
+    }
+
+    // "Getting a list of active uniform variables"
+    println!("Active Uniform Variables");
+    let uniforms = program.active_uniforms();
+    println!("Location | Name");
+    println!("------------------------------------------------");
+    for &(ref _count, ref _type, ref name) in uniforms.iter() {
+        let loc = unsafe { program.raw_uniform_location(name.as_slice()) };
+        println!("{:-8d} | {}\n", loc, name);
+    }
+
+    program.use_program();
+
+    let loop_start_time = time::precise_time_s();
+    loop {
+        match evt::poll_event() {
+            evt::QuitEvent(_) | evt::KeyUpEvent(_, _, key::EscapeKey, _, _)
+                => break,
+            _ => {
+                let time = time::precise_time_s();
+                if (time - loop_start_time) > 5.0 {
+                    break
+                }
+            }
+        }
+
+
+        vba.bind();
+
+        gl::Clear(gl::COLOR_BUFFER_BIT);
+
+        let time = time::precise_time_s();
+        let rot = &mat::Matrix3::from_angle_z(ang::deg(time as f32 * 180.0f32)
+                                              .to_rad())
+            .to_matrix4();
+
+        gl::DrawArrays(gl::TRIANGLES, 0, 6);
+
+        win.gl_swap_window();
+    }
+    Ok(())
+}
+
+fn glsl_cookbook_1() -> Result<(), ~str> {
     use glsl::ShaderBuilder;
     use glsl::TupleReflect;
 
@@ -1435,6 +1699,10 @@ pub fn compile_shader(src: &[&str], ty: GLenum) -> GLuint {
             gl::GetShaderiv(shader, gl::INFO_LOG_LENGTH, &mut len);
             let mut buf = Vec::from_elem(len as uint - 1, 0u8);     // subtract 1 to skip the trailing null character
             gl::GetShaderInfoLog(shader, len, ptr::mut_null(), buf.as_mut_ptr() as *mut GLchar);
+
+            println!("source for non-compiling shader");
+            for &s in src.iter() { println!("{:s}", s); }
+
             fail!("{}", str::from_utf8_owned(buf.move_iter().collect()));
         }
     }

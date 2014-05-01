@@ -39,7 +39,7 @@ gl: $(DEMO)-dbg
 	RUST_BACKTRACE=1 ./$< $@
 
 glsl-cookbook: $(DEMO)-dbg
-	RUST_BACKTRACE=1 ./$< $@
+	RUST_BACKTRACE=1 ./$< $@ 2
 
 open_gl: $(DEMO)-dbg
 	RUST_BACKTRACE=1 ./$< $@
