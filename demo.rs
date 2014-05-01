@@ -1040,7 +1040,7 @@ fn glsl_cookbook_2() -> Result<(), ~str> {
     };
 
     let vtex_loc : glsl::AttribLocation<glsl::Vec3> = glsl::AttribLocation {
-        name: 2 // implied by `layout (location = 1)`
+        name: 2 // implied by `layout (location = 2)`
     };
 
     let positionData : Vec<f32> = vec!(-0.8, -0.8, 0.0, // lower-left
@@ -1058,11 +1058,11 @@ fn glsl_cookbook_2() -> Result<(), ~str> {
                                     0.0, 0.0, 1.0);
 
     let textureData : Vec<f32> = vec!(1.0, 1.0, 0.0,
-                                      1.0, 0.0, 1.0,
-                                      0.0, 1.0, 1.0,
+                                      1.0, 0.0, 0.0,
+                                      0.0, 1.0, 0.0,
                                       1.0, 1.0, 0.0,
-                                      1.0, 0.0, 1.0,
-                                      0.0, 1.0, 1.0);
+                                      1.0, 0.0, 0.0,
+                                      0.0, 1.0, 0.0);
 
     let mut vbos = VertexBuffers::new(3);
     vbos.bind_and_init_array(0, positionData.slice_from(0), StaticDraw);
