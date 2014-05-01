@@ -962,7 +962,7 @@ fn glsl_cookbook_2() -> Result<(), ~str> {
     use glsl::ShaderBuilder;
     use glsl::TupleReflect;
 
-    let (width, height) = (800, 600);
+    let (width, height) = (800, 800);
 
     try!(sdl::init([sdl::InitVideo]));
 
