@@ -345,9 +345,10 @@ pub mod glsl {
             ProgramBuilder { name: program }
         }
 
-        pub fn link(self) -> Result<Program, ~str> {
+        pub fn link(self) -> Result<Program, (ProgramBuilder, ~str)> {
             super::try_link_program(self.name)
                 .map(|_| Program { name: self.name })
+                .map_err(|m| (self,m))
         }
 
         pub fn bind_attrib_location<T:ToGLSLType>(&self, l: &AttribLocation<T>, g: &Global<T>) {
@@ -1097,7 +1098,16 @@ fn glsl_cookbook_2() -> Result<(), ~str> {
         vtex_loc.vertex_attrib_pointer(gl::FALSE, glsl::Packed);
     }
 
-    let program = program.link().unwrap();
+    let program = program.link();
+    let program = match program {
+        Ok(p) => p,
+        Err((_builder, m)) => {
+            // In principle one could attempt to recover by modifying
+            // the builder in some respect.  In principle... but we
+            // just fail for now.
+            fail!(m)
+        }
+    };
 
     // "Using uniform blocks and uniform block objects"
     let blockIndex = unsafe { "BlobSettings".with_c_str(|p|gl::GetUniformBlockIndex(program.name, p)) };
