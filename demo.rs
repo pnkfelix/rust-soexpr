@@ -108,6 +108,7 @@ fn dispatch(driver: &str, variant: &str, args: &[~str]) -> Result<(), ~str> {
         ("glsl-cookbook", Some(s)) if "1".equiv(s) => glsl_cookbook_1(),
         ("glsl-cookbook", Some(s)) if "2".equiv(s) => glsl_cookbook_2(),
         ("glsl-cookbook", Some(s)) if "3".equiv(s) => glsl_cookbook_3(),
+        ("gl-superbible", Some(s)) if "1".equiv(s) => gl_superbible_1(),
         _otherwise                      => fail!("Unrecognized variant: {}", variant),
     }
 }
@@ -964,6 +965,65 @@ fn perspective<V:Primitive+Zero+One+Float+ApproxEq<V>+Mul<V,V>+PartOrdFloat<V>>(
     *result.mut_cr(2,3) = - one;
     *result.mut_cr(3,2) = - (two * zFar * zNear) / (zFar - zNear);
     return result;
+}
+
+fn init_common() -> Result<(~vid::Window, ~vid::GLContext), ~str> {
+
+    let (width, height) = (800, 800);
+
+    try!(sdl::init([sdl::InitVideo]));
+
+    match vid::gl_load_library(None) {
+        Ok(()) => {},
+        Err(s) => {
+            println!("gl_load_library() failed: {}", s);
+            return Err(s)
+        }
+    }
+
+    vid::gl_set_attribute(vid::GLContextMajorVersion, 3);
+    vid::gl_set_attribute(vid::GLContextMinorVersion, 2);
+    vid::gl_set_attribute(vid::GLContextProfileMask,
+                          vid::ll::SDL_GL_CONTEXT_PROFILE_CORE as int);
+
+    let win = try!(
+        vid::Window::new("Hello World", 100, 100, width, height,
+                         [vid::Shown]));
+
+    let ctxt = try!(win.gl_create_context());
+
+    gl::load_with(vid::gl_get_proc_address);
+
+    Ok((win, ctxt))
+}
+
+fn gl_superbible_1() -> Result<(), ~str> {
+    let (win, _ctxt) = try!(init_common());
+
+    let loop_start_time = time::precise_time_s();
+    loop {
+        match evt::poll_event() {
+            evt::QuitEvent(_) | evt::KeyUpEvent(_, _, key::EscapeKey, _, _)
+                => break,
+            _ => {
+                let time = time::precise_time_s();
+                if (time - loop_start_time) > 10.0 {
+                    break
+                }
+            }
+        }
+
+        let time = time::precise_time_s();
+        let currentTime = time - loop_start_time;
+        let color: [GLfloat, ..4] = [(currentTime.sin() * 0.5 + 0.5) as GLfloat,
+                                     (currentTime.cos() * 0.5 + 0.5) as GLfloat,
+                                     0.0, 1.0];
+        unsafe { gl::ClearBufferfv(gl::COLOR, 0, &color[0]); }
+
+        win.gl_swap_window();
+    }
+
+    Ok(())
 }
 
 fn glsl_cookbook_3() -> Result<(), ~str> {
