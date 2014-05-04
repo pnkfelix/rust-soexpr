@@ -107,6 +107,7 @@ fn dispatch(driver: &str, variant: &str, args: &[~str]) -> Result<(), ~str> {
         ("hello", _)                    => hello(),
         ("glsl-cookbook", Some(s)) if "1".equiv(s) => glsl_cookbook_1(),
         ("glsl-cookbook", Some(s)) if "2".equiv(s) => glsl_cookbook_2(),
+        ("glsl-cookbook", Some(s)) if "3".equiv(s) => glsl_cookbook_3(),
         _otherwise                      => fail!("Unrecognized variant: {}", variant),
     }
 }
@@ -965,6 +966,245 @@ fn perspective<V:Primitive+Zero+One+Float+ApproxEq<V>+Mul<V,V>+PartOrdFloat<V>>(
     return result;
 }
 
+fn glsl_cookbook_3() -> Result<(), ~str> {
+    use glsl::ShaderBuilder;
+    use glsl::TupleReflect;
+
+    let (width, height) = (800, 800);
+
+    try!(sdl::init([sdl::InitVideo]));
+
+    match vid::gl_load_library(None) {
+        Ok(()) => {},
+        Err(s) => {
+            println!("gl_load_library() failed: {}", s);
+            return Err(s)
+        }
+    }
+
+    vid::gl_set_attribute(vid::GLContextMajorVersion, 3);
+    vid::gl_set_attribute(vid::GLContextMinorVersion, 2);
+    vid::gl_set_attribute(vid::GLContextProfileMask,
+                          vid::ll::SDL_GL_CONTEXT_PROFILE_CORE as int);
+
+    let win = try!(
+        vid::Window::new("Hello World", 100, 100, width, height,
+                         [vid::Shown]));
+
+    let _ctxt = try!(win.gl_create_context());
+
+    gl::load_with(vid::gl_get_proc_address);
+
+    // "Compiling a shader"
+    let mut vs : glsl::VertexShaderBuilder = ShaderBuilder::new("#version 400");
+    vs.global::<glsl::Vec3>("layout (location = 0) in", "VertexPosition");
+    vs.global::<glsl::Vec3>("layout (location = 1) in", "VertexColor");
+    vs.global::<glsl::Vec2>("layout (location = 2) in", "VertexTexCoord");
+
+    vs.global::<glsl::Vec3>("out", "Color");
+    vs.global::<glsl::Vec2>("out", "TexCoord");
+
+    vs.def_main("TexCoord = VertexTexCoord;\
+               \nColor = VertexColor;\
+               \ngl_Position = vec4( VertexPosition, 1.0 );");
+
+    let vs = vs.compile();
+
+    // "Linking a shader program"
+    let mut fs : glsl::FragmentShaderBuilder = ShaderBuilder::new("#version 400");
+    fs.global::<glsl::Vec2>("in", "TexCoord");
+    fs.global::<glsl::Vec3>("in", "Color");
+
+    // When only one fragment output variable, it is always assigned
+    // to data location 0; thus use of `layout (location = ...)` is
+    // redundant in that case.  But, more robust to say it explicitly.
+    fs.global::<glsl::Vec4>("layout (location = 0) out", "FragColor");
+
+    fs.uniform_block("BlobSettings", [(glsl::vec4, "InnerColor"),
+                                      (glsl::vec4, "OuterColor"),
+                                      (glsl::float, "RadiusInner"),
+                                      (glsl::float, "RadiusOuter")],
+                     Some("Blob"));
+
+    fs.def_main("float dx = TexCoord.x - 0.5;\
+               \nfloat dy = TexCoord.y - 0.5;\
+               \nfloat dist = sqrt(dx * dx + dy * dy);\
+               \n//FragColor = mix( Blob.InnerColor, Blob.OuterColor,\
+               \n//                  smoothstep( Blob.RadiusInner, Blob.RadiusOuter, dist));\
+               \nFragColor = mix( Blob.InnerColor, vec4(Color,1.0),\
+               \n                  smoothstep( Blob.RadiusInner, Blob.RadiusOuter, dist));\
+               \n//FragColor = vec4(Color, 1.0);\
+               \n");
+
+    let fs = fs.compile();
+
+    let program = glsl::ProgramBuilder::new(&vs, &fs);
+
+    let vpos_loc : glsl::AttribLocation<glsl::Vec3> = glsl::AttribLocation {
+        name: 0 // implied by `layout (location = 0)`
+    };
+
+    let vcol_loc : glsl::AttribLocation<glsl::Vec3> = glsl::AttribLocation {
+        name: 1 // implied by `layout (location = 1)`
+    };
+
+    let vtex_loc : glsl::AttribLocation<glsl::Vec2> = glsl::AttribLocation {
+        name: 2 // implied by `layout (location = 2)`
+    };
+
+    let positionData : Vec<f32> = vec!(-0.8, -0.8, 0.0, // lower-left
+                                        0.8, -0.8, 0.0, // upper-left
+                                       -0.8,  0.8, 0.0, // lower-right
+                                        0.8,  0.8, 0.0, // upper-right
+                                        0.8, -0.8, 0.0, // (upper-left)
+                                       -0.8,  0.8, 0.0); // (lower-right)
+
+    let colorData : Vec<f32> = vec!(1.0, 0.0, 0.0,
+                                    0.0, 0.5, 0.0,
+                                    0.0, 0.0, 0.5,
+                                    0.0, 0.0, 0.0,
+                                    0.0, 0.5, 0.0,
+                                    0.0, 0.0, 0.5);
+
+    let textureData : Vec<f32> = vec!(1.0, 1.0,
+                                      1.0, 0.0,
+                                      0.0, 1.0,
+                                      1.0, 1.0,
+                                      1.0, 0.0,
+                                      0.0, 1.0);
+
+    let mut vbos = VertexBuffers::new(3);
+    vbos.bind_and_init_array(0, positionData.slice_from(0), StaticDraw);
+    vbos.bind_and_init_array(1, colorData.slice_from(0), StaticDraw);
+    vbos.bind_and_init_array(2, textureData.slice_from(0), StaticDraw);
+
+    let mut vba = VertexArray::new();
+    vba.bind();
+    vpos_loc.enable_vertex_attrib_array();
+    vcol_loc.enable_vertex_attrib_array();
+    vtex_loc.enable_vertex_attrib_array();
+
+    vbos.bind_array(0);
+    unsafe {
+        vpos_loc.vertex_attrib_pointer(gl::FALSE, glsl::Packed);
+    }
+
+    vbos.bind_array(1);
+    unsafe {
+        vcol_loc.vertex_attrib_pointer(gl::FALSE, glsl::Packed);
+    }
+
+    vbos.bind_array(2);
+    unsafe {
+        vtex_loc.vertex_attrib_pointer(gl::FALSE, glsl::Packed);
+    }
+
+    let program = program.link();
+    let program = match program {
+        Ok(p) => p,
+        Err((_builder, m)) => {
+            // In principle one could attempt to recover by modifying
+            // the builder in some respect.  In principle... but we
+            // just fail for now.
+            fail!(m)
+        }
+    };
+
+    // "Using uniform blocks and uniform block objects"
+    let blockIndex = unsafe { "BlobSettings".with_c_str(|p|gl::GetUniformBlockIndex(program.name, p)) };
+    let mut blockSize : GLint = 0;
+    unsafe {
+        gl::GetActiveUniformBlockiv(program.name, blockIndex, gl::UNIFORM_BLOCK_DATA_SIZE, &mut blockSize);
+    }
+    println!("blockIndex: {} blockSize: {}", blockIndex, blockSize);
+    assert!(blockSize > 0);
+    let mut blockBuffer = Vec::from_elem(blockSize as uint, 0 as GLubyte);
+    let names = ["BlobSettings.InnerColor", "BlobSettings.OuterColor", "BlobSettings.RadiusInner", "BlobSettings.RadiusOuter"];
+    let mut indices = [0 as GLuint, ..4];
+    {
+        let strs : Vec<c_str::CString> = names.iter().map(|s|s.to_c_str()).collect();
+        unsafe { gl::GetUniformIndices(program.name, indices.len() as GLint, strs.iter().map(|cs| {
+            cs.as_bytes().as_ptr() as *GLchar}).collect::<Vec<_>>().as_ptr(), indices.as_mut_ptr()); }
+    }
+    let mut offset = [0 as GLint, ..4];
+    unsafe { gl::GetActiveUniformsiv(program.name, offset.len() as GLint, indices.as_ptr(),
+                                     gl::UNIFORM_OFFSET, offset.as_mut_ptr()); }
+
+    let outerColor : [GLfloat, ..4] = [0.0, ..4];
+    let innerColor : [GLfloat, ..4] = [1.0, 1.0, 0.75, 1.0];
+    let innerRadius : GLfloat = 0.25;
+    let outerRadius : GLfloat = 0.45;
+
+    unsafe {
+        let blockBuffer = blockBuffer.as_mut_ptr() as uint;
+        println!("blockIndex: {} blockSize: {} blockBuffer: {:?} offsets: {:?}", blockIndex, blockSize, blockBuffer, offset);
+        mem::move_val_init::<[GLfloat, ..4]>(cast::transmute(blockBuffer + offset[0] as uint), innerColor);
+        mem::move_val_init::<[GLfloat, ..4]>(cast::transmute(blockBuffer + offset[1] as uint), outerColor);
+        mem::move_val_init::<GLfloat>(cast::transmute(blockBuffer + offset[2] as uint), innerRadius);
+        mem::move_val_init::<GLfloat>(cast::transmute(blockBuffer + offset[3] as uint), outerRadius);
+    }
+
+    let mut uboHandle : GLuint = 0;
+    unsafe {
+        gl::GenBuffers(1, &mut uboHandle);
+        gl::BindBuffer( gl::UNIFORM_BUFFER, uboHandle );
+        gl::BufferData( gl::UNIFORM_BUFFER, blockSize as GLsizeiptr, blockBuffer.as_mut_ptr() as *GLvoid, gl::DYNAMIC_DRAW );
+    }
+
+    gl::BindBufferBase( gl::UNIFORM_BUFFER, blockIndex, uboHandle );
+
+    // "Getting a list of active vertex input attributes and indices"
+    let attribs = program.active_attribs();
+    println!("Active Attributes");
+    println!("Index | Name");
+    println!("------------------------------------------------");
+    for &(ref _count, ref _type, ref name) in attribs.iter() {
+        let loc = unsafe { program.raw_attrib_location(name.as_slice()) };
+        println!("{:-5d} | {}", loc, name);
+    }
+
+    // "Getting a list of active uniform variables"
+    println!("Active Uniform Variables");
+    let uniforms = program.active_uniforms();
+    println!("Location | Name");
+    println!("------------------------------------------------");
+    for &(ref _count, ref _type, ref name) in uniforms.iter() {
+        let loc = unsafe { program.raw_uniform_location(name.as_slice()) };
+        println!("{:-8d} | {}\n", loc, name);
+    }
+
+    program.use_program();
+
+    let loop_start_time = time::precise_time_s();
+    loop {
+        match evt::poll_event() {
+            evt::QuitEvent(_) | evt::KeyUpEvent(_, _, key::EscapeKey, _, _)
+                => break,
+            _ => {
+                let time = time::precise_time_s();
+                if (time - loop_start_time) > 10.0 {
+                    break
+                }
+            }
+        }
+
+
+        vba.bind();
+
+        gl::Clear(gl::COLOR_BUFFER_BIT);
+
+        let time = time::precise_time_s();
+        let rot = &mat::Matrix3::from_angle_z(ang::deg(time as f32 * 180.0f32)
+                                              .to_rad())
+            .to_matrix4();
+
+        gl::DrawArrays(gl::TRIANGLES, 0, 6);
+
+        win.gl_swap_window();
+    }
+    Ok(())
+}
+
 fn glsl_cookbook_2() -> Result<(), ~str> {
     use glsl::ShaderBuilder;
     use glsl::TupleReflect;
@@ -1236,8 +1476,10 @@ fn glsl_cookbook_1() -> Result<(), ~str> {
     // "Compiling a shader"
     let mut vs : glsl::VertexShaderBuilder = ShaderBuilder::new("#version 400");
     vs.global::<glsl::Vec3>("layout (location = 0) in", "VertexPosition");
-    vs.global::<glsl::Vec3>("layout (location = 1) in", "VertexColor");
+    vs.global::<glsl::Vec3>("layout (location = 1) in", "VertexNormal");
+    vs.global::<glsl::Vec3>("layout (location = 2) in", "VertexColor");
 
+    vs.global::<glsl::Vec3>("out", "LightIntensity");
     vs.global::<glsl::Vec3>("out", "Color");
 
     let rot_g = vs.global::<glsl::Mat4>("uniform", "RotationMatrix");
@@ -1281,7 +1523,7 @@ fn glsl_cookbook_1() -> Result<(), ~str> {
 
     let mut vbos = VertexBuffers::new(2);
     vbos.bind_and_init_array(0, positionData.slice_from(0), StaticDraw);
-    vbos.bind_and_init_array(1, colorData.slice_from(0), StaticDraw);
+    vbos.bind_and_init_array(2, colorData.slice_from(0), StaticDraw);
 
     let mut vba = VertexArray::new();
     vba.bind();
@@ -1293,7 +1535,7 @@ fn glsl_cookbook_1() -> Result<(), ~str> {
         vpos_loc.vertex_attrib_pointer(gl::FALSE, glsl::Packed);
     }
 
-    vbos.bind_array(1);
+    vbos.bind_array(2);
     unsafe {
         vcol_loc.vertex_attrib_pointer(gl::FALSE, glsl::Packed);
     }
