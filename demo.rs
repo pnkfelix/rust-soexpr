@@ -984,12 +984,14 @@ impl WindowOpts {
     }
 }
 
-enum Redraw { Redraw, RedrawUnnecessary }
+enum Redraw { Redraw, NothingChanged }
+
+pub type EventHandler<'a> = 'a |e: evt::Event, seconds_elapsed: f64| -> Redraw;
 
 impl WinGL {
     fn loop_timeout(&mut self,
                     seconds_max: f64,
-                    process: |e: evt::Event, seconds_elapsed: f64| -> Redraw) {
+                    process: EventHandler) -> Result<(), ~str> {
         sdl_loop_timeout(self.win, seconds_max, process)
     }
 }
@@ -1043,7 +1045,7 @@ fn init_common(w: WindowOpts) -> Result<(~vid::Window, ~vid::GLContext), ~str> {
 
 fn sdl_loop_timeout(win: &vid::Window,
                     seconds_max: f64,
-                    process: |e: evt::Event, seconds_elapsed: f64| -> Redraw) {
+                    process: EventHandler) -> Result<(), ~str> {
     let loop_start_time = time::precise_time_s();
     loop {
         let e = evt::poll_event();
@@ -1064,29 +1066,26 @@ fn sdl_loop_timeout(win: &vid::Window,
             RedrawUnnecessary => {}
         }
     }
+    Ok(())
 }
 
 fn gl_superbible_1() -> Result<(), ~str> {
-    let (win, _ctxt) = try!(init_common(WindowOpts{ width: 800,
-                                                    height: 800 }));
+    let mut win = try!((WindowOpts{ width: 800, height: 800}).init());
 
-    sdl_loop_timeout(win, 10.0, |_, currentTime| {
+    win.loop_timeout(10.0, |_, currentTime| {
         let color: [GLfloat, ..4] = [(currentTime.sin() * 0.5 + 0.5) as GLfloat,
                                      (currentTime.cos() * 0.5 + 0.5) as GLfloat,
                                      0.0, 1.0];
         unsafe { gl::ClearBufferfv(gl::COLOR, 0, &color[0]); }
         Redraw
-    });
-
-    Ok(())
+    })
 }
 
 fn glsl_cookbook_3() -> Result<(), ~str> {
     use glsl::ShaderBuilder;
     use glsl::TupleReflect;
 
-    let (win, _ctxt) = try!(init_common(WindowOpts{ width: 800,
-                                                    height: 800 }));
+    let mut win = try!((WindowOpts{ width: 800, height: 800 }).init());
 
     // "Compiling a shader"
     let mut vs : glsl::VertexShaderBuilder = ShaderBuilder::new("#version 400");
@@ -1268,42 +1267,26 @@ fn glsl_cookbook_3() -> Result<(), ~str> {
 
     program.use_program();
 
-    let loop_start_time = time::precise_time_s();
-    loop {
-        match evt::poll_event() {
-            evt::QuitEvent(_) | evt::KeyUpEvent(_, _, key::EscapeKey, _, _)
-                => break,
-            _ => {
-                let time = time::precise_time_s();
-                if (time - loop_start_time) > 10.0 {
-                    break
-                }
-            }
-        }
-
-
+    win.loop_timeout(10.0, |_, time| {
         vba.bind();
 
         gl::Clear(gl::COLOR_BUFFER_BIT);
 
-        let time = time::precise_time_s();
         let rot = &mat::Matrix3::from_angle_z(ang::deg(time as f32 * 180.0f32)
                                               .to_rad())
             .to_matrix4();
 
         gl::DrawArrays(gl::TRIANGLES, 0, 6);
 
-        win.gl_swap_window();
-    }
-    Ok(())
+        Redraw
+    })
 }
 
 fn glsl_cookbook_2() -> Result<(), ~str> {
     use glsl::ShaderBuilder;
     use glsl::TupleReflect;
 
-    let (win, _ctxt) = try!(init_common(WindowOpts{ width: 800,
-                                                    height: 800 }));
+    let mut win = try!((WindowOpts{ width: 800, height: 800 }).init());
 
     // "Compiling a shader"
     let mut vs : glsl::VertexShaderBuilder = ShaderBuilder::new("#version 400");
@@ -1485,48 +1468,30 @@ fn glsl_cookbook_2() -> Result<(), ~str> {
 
     program.use_program();
 
-    let loop_start_time = time::precise_time_s();
-    loop {
-        match evt::poll_event() {
-            evt::QuitEvent(_) | evt::KeyUpEvent(_, _, key::EscapeKey, _, _)
-                => break,
-            _ => {
-                let time = time::precise_time_s();
-                if (time - loop_start_time) > 10.0 {
-                    break
-                }
-            }
-        }
-
-
+    win.loop_timeout(10.0, |_, time| {
         vba.bind();
 
         gl::Clear(gl::COLOR_BUFFER_BIT);
 
-        let time = time::precise_time_s();
         let rot = &mat::Matrix3::from_angle_z(ang::deg(time as f32 * 180.0f32)
                                               .to_rad())
             .to_matrix4();
 
         gl::DrawArrays(gl::TRIANGLES, 0, 6);
-
-        win.gl_swap_window();
-    }
-    Ok(())
+        Redraw
+    })
 }
 
 fn glsl_cookbook_1() -> Result<(), ~str> {
     use glsl::ShaderBuilder;
     use glsl::TupleReflect;
 
-    let (win, _ctxt) = try!(init_common(WindowOpts{ width: 800,
-                                                    height: 600 }));
+    let mut win = try!((WindowOpts{ width: 800, height: 600 }).init());
 
     // "Compiling a shader"
     let mut vs : glsl::VertexShaderBuilder = ShaderBuilder::new("#version 400");
     vs.global::<glsl::Vec3>("layout (location = 0) in", "VertexPosition");
-    vs.global::<glsl::Vec3>("layout (location = 1) in", "VertexNormal");
-    vs.global::<glsl::Vec3>("layout (location = 2) in", "VertexColor");
+    vs.global::<glsl::Vec3>("layout (location = 1) in", "VertexColor");
 
     vs.global::<glsl::Vec3>("out", "LightIntensity");
     vs.global::<glsl::Vec3>("out", "Color");
@@ -1572,7 +1537,7 @@ fn glsl_cookbook_1() -> Result<(), ~str> {
 
     let mut vbos = VertexBuffers::new(2);
     vbos.bind_and_init_array(0, positionData.slice_from(0), StaticDraw);
-    vbos.bind_and_init_array(2, colorData.slice_from(0), StaticDraw);
+    vbos.bind_and_init_array(1, colorData.slice_from(0), StaticDraw);
 
     let mut vba = VertexArray::new();
     vba.bind();
@@ -1584,7 +1549,7 @@ fn glsl_cookbook_1() -> Result<(), ~str> {
         vpos_loc.vertex_attrib_pointer(gl::FALSE, glsl::Packed);
     }
 
-    vbos.bind_array(2);
+    vbos.bind_array(1);
     unsafe {
         vcol_loc.vertex_attrib_pointer(gl::FALSE, glsl::Packed);
     }
@@ -1613,25 +1578,11 @@ fn glsl_cookbook_1() -> Result<(), ~str> {
 
     program.use_program();
 
-    let loop_start_time = time::precise_time_s();
-    loop {
-        match evt::poll_event() {
-            evt::QuitEvent(_) | evt::KeyUpEvent(_, _, key::EscapeKey, _, _)
-                => break,
-            _ => {
-                let time = time::precise_time_s();
-                if (time - loop_start_time) > 5.0 {
-                    break
-                }
-            }
-        }
-
-
+    win.loop_timeout(5.0, |_, time| {
         vba.bind();
 
         gl::Clear(gl::COLOR_BUFFER_BIT);
 
-        let time = time::precise_time_s();
         let rot = &mat::Matrix3::from_angle_z(ang::deg(time as f32 * 180.0f32)
                                               .to_rad())
             .to_matrix4();
@@ -1641,18 +1592,15 @@ fn glsl_cookbook_1() -> Result<(), ~str> {
         }
 
         gl::DrawArrays(gl::TRIANGLES, 0, 3);
-
-        win.gl_swap_window();
-    }
-    Ok(())
+        Redraw
+    })
 }
 
 fn gl() -> Result<(), ~str> {
     use glsl::ShaderBuilder;
     use glsl::TupleReflect;
 
-    let (win, _ctxt) = try!(init_common(WindowOpts{ width: 800,
-                                                    height: 600 }));
+    let mut win = try!((WindowOpts{ width: 800, height: 600 }).init());
 
     #[deriving(Default)]
     struct VertexDataRow {
@@ -1799,25 +1747,9 @@ static VERTEX_DATA: VertexDataType = [
     let mut ebo = ElementBuffer::new();
     ebo.bind_and_init_elements(elements.slice_from(0), StaticDraw);
 
-    let loop_start_time = time::precise_time_s();
-
-    loop {
-        match evt::poll_event() {
-            evt::QuitEvent(_) | evt::KeyUpEvent(_, _, key::EscapeKey, _, _)
-                => break,
-            _ => {
-                let time = time::precise_time_s();
-                if (time - loop_start_time) > 5.0 {
-                    break
-                }
-            }
-        }
-
+    win.loop_timeout(5.0, |_, time| {
         // Use a uniform red
         // gl::Uniform3f(uni_color, 1.0, 0.0, 0.0);
-
-        let time = time::precise_time_s();
-        // gl::Uniform3f(uni_color, ((time+4.0).sin() as f32 + 1.0)/2.0, 0.0, 0.0);
 
         gl::ClearColor(0.3, 0.3, 0.3, 1.0);
         gl::Clear(gl::COLOR_BUFFER_BIT);
@@ -1859,12 +1791,8 @@ static VERTEX_DATA: VertexDataType = [
         // gl::DrawArrays(gl::TRIANGLES, 0, 6);
         ebo.draw_elements();
 
-        win.gl_swap_window();
-    }
-
-    // sdl::timer::delay(2000);
-
-    return Ok(());
+        Redraw
+    })
 }
 
 pub fn sdl_format_to_gl_format_type(f: pix::PixelFormat) -> (GLenum, GLenum) {
