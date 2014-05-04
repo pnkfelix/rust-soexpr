@@ -1,4 +1,4 @@
-default: glsl-cookbook # gl # hello # do-demo
+default: gl-superbible # glsl-cookbook # gl hello # do-demo
 
 RUSTC=rustc
 DEMO_SRC=demo.rs
@@ -37,6 +37,9 @@ soe: $(DEMO)-dbg
 
 gl: $(DEMO)-dbg
 	RUST_BACKTRACE=1 ./$< $@
+
+gl-superbible: $(DEMO)-dbg
+	RUST_BACKTRACE=1 ./$< $@ 2
 
 glsl-cookbook: $(DEMO)-dbg
 	RUST_BACKTRACE=1 ./$< $@ 2
