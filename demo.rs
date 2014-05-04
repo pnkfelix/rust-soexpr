@@ -967,9 +967,13 @@ fn perspective<V:Primitive+Zero+One+Float+ApproxEq<V>+Mul<V,V>+PartOrdFloat<V>>(
     return result;
 }
 
-fn init_common() -> Result<(~vid::Window, ~vid::GLContext), ~str> {
+struct WindowOpts {
+    width: int, height: int
+}
 
-    let (width, height) = (800, 800);
+fn init_common(w: WindowOpts) -> Result<(~vid::Window, ~vid::GLContext), ~str> {
+
+    let WindowOpts{ width, height } = w;
 
     try!(sdl::init([sdl::InitVideo]));
 
@@ -992,13 +996,31 @@ fn init_common() -> Result<(~vid::Window, ~vid::GLContext), ~str> {
 
     let ctxt = try!(win.gl_create_context());
 
+    // UGH: if you create a window without the vid::OpenGL flag above,
+    // then doing Renderer::from_window resets the PROFILE_MASK state
+    // to 0 (and in general seems to cause a re-initialiation of
+    // OpenGL in general).  The best way to avoid this, AFAICT, is to
+    // just not ever create a Renderer from a window at all.  SDL2
+    // itself could probably do a better job of helping the user catch
+    // this sort of bug, but failing that, maybe rust-sdl2 could
+    // provide some way to prevent this sort of bug.
+    /*
+    {
+        println!("before rend::Renderer::from_window");
+        let ren = try!(rend::Renderer::from_window(
+            win, rend::DriverAuto, [rend::Accelerated, rend::TargetTexture]));
+        println!("after rend::Renderer::from_window");
+    }
+     */
+
     gl::load_with(vid::gl_get_proc_address);
 
     Ok((win, ctxt))
 }
 
 fn gl_superbible_1() -> Result<(), ~str> {
-    let (win, _ctxt) = try!(init_common());
+    let (win, _ctxt) = try!(init_common(WindowOpts{ width: 800,
+                                                    height: 800 }));
 
     let loop_start_time = time::precise_time_s();
     loop {
@@ -1030,30 +1052,8 @@ fn glsl_cookbook_3() -> Result<(), ~str> {
     use glsl::ShaderBuilder;
     use glsl::TupleReflect;
 
-    let (width, height) = (800, 800);
-
-    try!(sdl::init([sdl::InitVideo]));
-
-    match vid::gl_load_library(None) {
-        Ok(()) => {},
-        Err(s) => {
-            println!("gl_load_library() failed: {}", s);
-            return Err(s)
-        }
-    }
-
-    vid::gl_set_attribute(vid::GLContextMajorVersion, 3);
-    vid::gl_set_attribute(vid::GLContextMinorVersion, 2);
-    vid::gl_set_attribute(vid::GLContextProfileMask,
-                          vid::ll::SDL_GL_CONTEXT_PROFILE_CORE as int);
-
-    let win = try!(
-        vid::Window::new("Hello World", 100, 100, width, height,
-                         [vid::Shown]));
-
-    let _ctxt = try!(win.gl_create_context());
-
-    gl::load_with(vid::gl_get_proc_address);
+    let (win, _ctxt) = try!(init_common(WindowOpts{ width: 800,
+                                                    height: 800 }));
 
     // "Compiling a shader"
     let mut vs : glsl::VertexShaderBuilder = ShaderBuilder::new("#version 400");
@@ -1269,30 +1269,8 @@ fn glsl_cookbook_2() -> Result<(), ~str> {
     use glsl::ShaderBuilder;
     use glsl::TupleReflect;
 
-    let (width, height) = (800, 800);
-
-    try!(sdl::init([sdl::InitVideo]));
-
-    match vid::gl_load_library(None) {
-        Ok(()) => {},
-        Err(s) => {
-            println!("gl_load_library() failed: {}", s);
-            return Err(s)
-        }
-    }
-
-    vid::gl_set_attribute(vid::GLContextMajorVersion, 3);
-    vid::gl_set_attribute(vid::GLContextMinorVersion, 2);
-    vid::gl_set_attribute(vid::GLContextProfileMask,
-                          vid::ll::SDL_GL_CONTEXT_PROFILE_CORE as int);
-
-    let win = try!(
-        vid::Window::new("Hello World", 100, 100, width, height,
-                         [vid::Shown]));
-
-    let _ctxt = try!(win.gl_create_context());
-
-    gl::load_with(vid::gl_get_proc_address);
+    let (win, _ctxt) = try!(init_common(WindowOpts{ width: 800,
+                                                    height: 800 }));
 
     // "Compiling a shader"
     let mut vs : glsl::VertexShaderBuilder = ShaderBuilder::new("#version 400");
@@ -1508,30 +1486,8 @@ fn glsl_cookbook_1() -> Result<(), ~str> {
     use glsl::ShaderBuilder;
     use glsl::TupleReflect;
 
-    let (width, height) = (800, 600);
-
-    try!(sdl::init([sdl::InitVideo]));
-
-    match vid::gl_load_library(None) {
-        Ok(()) => {},
-        Err(s) => {
-            println!("gl_load_library() failed: {}", s);
-            return Err(s)
-        }
-    }
-
-    vid::gl_set_attribute(vid::GLContextMajorVersion, 3);
-    vid::gl_set_attribute(vid::GLContextMinorVersion, 2);
-    vid::gl_set_attribute(vid::GLContextProfileMask,
-                          vid::ll::SDL_GL_CONTEXT_PROFILE_CORE as int);
-
-    let win = try!(
-        vid::Window::new("Hello World", 100, 100, width, height,
-                         [vid::Shown]));
-
-    let _ctxt = try!(win.gl_create_context());
-
-    gl::load_with(vid::gl_get_proc_address);
+    let (win, _ctxt) = try!(init_common(WindowOpts{ width: 800,
+                                                    height: 600 }));
 
     // "Compiling a shader"
     let mut vs : glsl::VertexShaderBuilder = ShaderBuilder::new("#version 400");
@@ -1662,67 +1618,8 @@ fn gl() -> Result<(), ~str> {
     use glsl::ShaderBuilder;
     use glsl::TupleReflect;
 
-    let (width, height) = (800, 600);
-
-    try!(sdl::init([sdl::InitVideo]));
-
-    match vid::gl_load_library(None) {
-        Ok(()) => {},
-        Err(s) => {
-            println!("gl_load_library() failed: {}", s);
-            return Err(s)
-        }
-    }
-
-    vid::gl_set_attribute(vid::GLContextMajorVersion, 3);
-    vid::gl_set_attribute(vid::GLContextMinorVersion, 2);
-    vid::gl_set_attribute(vid::GLContextProfileMask,
-                          vid::ll::SDL_GL_CONTEXT_PROFILE_CORE as int);
-
-
-    // THis is some code I put in when I was desparately trying to get
-    // things to work.  I am stil lnot clear on how far it actually
-    // got me; I'm surprised I left it in as long as I did, when it
-    // seems to not actually matter at all in the end, compared to
-    // simply not creating a Renderer (see below).a
-    /*
-    {
-        // vid::ll::GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT
-        let flags = vid::gl_get_attribute(vid::GLContextFlags);
-        let flags = match flags {
-            Ok(f) => f,
-            Err(s) => return Err(s),
-        };
-        vid::gl_set_attribute(vid::GLContextFlags, 1 | flags);
-    }
-     */
-
-    let win = try!(
-        vid::Window::new("Hello World", 100, 100, width, height,
-                         [vid::Shown]));
-
-    let _ctxt = try!(win.gl_create_context());
-
-    // UGH: if you create a window without the vid::OpenGL flag above,
-    // then doing Renderer::from_window resets the PROFILE_MASK state
-    // to 0 (and in general seems to cause a re-initialiation of
-    // OpenGL in general).  The best way to avoid this, AFAICT, is to
-    // just not ever create a Renderer from a window at all.  SDL2
-    // itself could probably do a better job of helping the user catch
-    // this sort of bug, but failing that, maybe rust-sdl2 could
-    // provide some way to prevent this sort of bug.
-    /*
-    {
-        println!("before rend::Renderer::from_window");
-        let ren = try!(rend::Renderer::from_window(
-            win, rend::DriverAuto, [rend::Accelerated, rend::TargetTexture]));
-        println!("after rend::Renderer::from_window");
-    }
-     */
-
-    // vid::gl_set_swap_interval(1) || fail!("oops");
-
-    gl::load_with(vid::gl_get_proc_address);
+    let (win, _ctxt) = try!(init_common(WindowOpts{ width: 800,
+                                                    height: 600 }));
 
     #[deriving(Default)]
     struct VertexDataRow {
