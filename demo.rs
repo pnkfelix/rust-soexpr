@@ -109,6 +109,7 @@ fn dispatch(driver: &str, variant: &str, args: &[~str]) -> Result<(), ~str> {
         ("glsl-cookbook", Some(s)) if "2".equiv(s) => glsl_cookbook_2(),
         ("glsl-cookbook", Some(s)) if "3".equiv(s) => glsl_cookbook_3(),
         ("gl-superbible", Some(s)) if "1".equiv(s) => gl_superbible_1(),
+        ("gl-superbible", Some(s)) if "2".equiv(s) => gl_superbible_2(),
         _otherwise                      => fail!("Unrecognized variant: {}", variant),
     }
 }
@@ -764,6 +765,7 @@ impl VertexBuffer {
     pub fn new() -> VertexBuffer {
         VertexBuffer { singleton: VertexBuffers::new(1) }
     }
+    #[allow(dead_code)]
     fn bind_array(&mut self) { self.singleton.bind_array(0) }
     fn bind_and_init_array<T>(&mut self, init: &[T], usage: BufferDataUsage) {
         self.singleton.bind_and_init_array(0, init, usage)
@@ -852,6 +854,7 @@ impl ElementBuffer {
     fn new() -> ElementBuffer {
         ElementBuffer { singleton: ElementBuffers::new(1) }
     }
+    #[allow(dead_code)]
     fn bind_elements(&mut self) { self.singleton.bind_elements(0) }
     fn bind_and_init_elements<T:ElementBufferData>(&mut self,
                                                    init: &[T],
@@ -939,10 +942,12 @@ struct Texture {
 }
 
 impl Texture {
+    #[allow(dead_code)]
     fn new() -> Texture {
         Texture { singleton: Textures::new(1) }
     }
 
+    #[allow(dead_code)]
     fn bind(&self, dim: TextureTarget) { self.singleton.bind(0, dim) }
 }
 
@@ -1063,20 +1068,80 @@ fn sdl_loop_timeout(win: &vid::Window,
         }
         match process(e, elapsed) {
             Redraw => win.gl_swap_window(),
-            RedrawUnnecessary => {}
+            NothingChanged => {}
         }
     }
     Ok(())
 }
 
 fn gl_superbible_1() -> Result<(), ~str> {
+    use VSB = self::glsl::VertexShaderBuilder;
+    use FSB = self::glsl::FragmentShaderBuilder;
+    use glsl::ShaderBuilder;
+
     let mut win = try!((WindowOpts{ width: 800, height: 800}).init());
+
+    let mut vs : VSB = ShaderBuilder::new("#version 410 core"); // was 430
+    vs.def_main("gl_Position = vec4(0.0, 0.0, 0.5, 1.0);");
+
+    let mut fs : FSB = ShaderBuilder::new("#version 410 core"); // was 430
+    fs.global::<glsl::Vec4>("out", "color");
+    fs.def_main("color = vec4(0.0, 0.8, 1.0, 1.0);");
+
+    let vs = vs.compile();
+    let fs = fs.compile();
+    let program = glsl::Program::new(&vs, &fs);
+
+    let mut va = VertexArray::new();
+    va.bind();
 
     win.loop_timeout(10.0, |_, currentTime| {
         let color: [GLfloat, ..4] = [(currentTime.sin() * 0.5 + 0.5) as GLfloat,
                                      (currentTime.cos() * 0.5 + 0.5) as GLfloat,
                                      0.0, 1.0];
         unsafe { gl::ClearBufferfv(gl::COLOR, 0, &color[0]); }
+        program.use_program();
+        gl::PointSize(10.0);
+        gl::DrawArrays(gl::POINTS, 0, 1);
+        Redraw
+    })
+}
+
+fn gl_superbible_2() -> Result<(), ~str> {
+    use VSB = self::glsl::VertexShaderBuilder;
+    use FSB = self::glsl::FragmentShaderBuilder;
+    use glsl::ShaderBuilder;
+
+    let mut win = try!((WindowOpts{ width: 800, height: 800}).init());
+
+    let mut vs : VSB = ShaderBuilder::new("#version 410 core"); // was 430
+
+    // gl_VertexID is an implicit input for index being processed by shader
+    vs.def_main("const vec4 vertices[3] =
+                           vec4[3](vec4( 0.25, -0.25, 0.5, 1.0),
+                                   vec4(-0.25, -0.25, 0.5, 1.0),
+                                   vec4( 0.25,  0.25, 0.5, 1.0));
+                 gl_Position = vertices[gl_VertexID];");
+
+    let mut fs : FSB = ShaderBuilder::new("#version 410 core"); // was 430
+    fs.global::<glsl::Vec4>("out", "color");
+    fs.def_main("color = vec4(0.0, 0.8, 1.0, 1.0);");
+
+    let vs = vs.compile();
+    let fs = fs.compile();
+    let program = glsl::Program::new(&vs, &fs);
+
+    let mut va = VertexArray::new();
+    va.bind();
+
+    win.loop_timeout(10.0, |_, currentTime| {
+        let color: [GLfloat, ..4] = [(currentTime.sin() * 0.5 + 0.5) as GLfloat,
+                                     (currentTime.cos() * 0.5 + 0.5) as GLfloat,
+                                     0.0, 1.0];
+        unsafe { gl::ClearBufferfv(gl::COLOR, 0, &color[0]); }
+        program.use_program();
+        gl::PointSize(10.0);
+        gl::DrawArrays(gl::TRIANGLES, 0, 3);
         Redraw
     })
 }
@@ -1267,14 +1332,10 @@ fn glsl_cookbook_3() -> Result<(), ~str> {
 
     program.use_program();
 
-    win.loop_timeout(10.0, |_, time| {
+    win.loop_timeout(10.0, |_, _time| {
         vba.bind();
 
         gl::Clear(gl::COLOR_BUFFER_BIT);
-
-        let rot = &mat::Matrix3::from_angle_z(ang::deg(time as f32 * 180.0f32)
-                                              .to_rad())
-            .to_matrix4();
 
         gl::DrawArrays(gl::TRIANGLES, 0, 6);
 
@@ -1468,14 +1529,10 @@ fn glsl_cookbook_2() -> Result<(), ~str> {
 
     program.use_program();
 
-    win.loop_timeout(10.0, |_, time| {
+    win.loop_timeout(10.0, |_, _time| {
         vba.bind();
 
         gl::Clear(gl::COLOR_BUFFER_BIT);
-
-        let rot = &mat::Matrix3::from_angle_z(ang::deg(time as f32 * 180.0f32)
-                                              .to_rad())
-            .to_matrix4();
 
         gl::DrawArrays(gl::TRIANGLES, 0, 6);
         Redraw
