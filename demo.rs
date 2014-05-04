@@ -971,6 +971,29 @@ struct WindowOpts {
     width: int, height: int
 }
 
+/// A window with an attached (pre-initialized) GL context.
+struct WinGL {
+    win: ~vid::Window,
+    ctxt: ~vid::GLContext,
+}
+
+impl WindowOpts {
+    fn init(&self) -> Result<WinGL, ~str> {
+        let (w, c) = try!(init_common(*self));
+        Ok(WinGL{ win: w, ctxt: c })
+    }
+}
+
+enum Redraw { Redraw, RedrawUnnecessary }
+
+impl WinGL {
+    fn loop_timeout(&mut self,
+                    seconds_max: f64,
+                    process: |e: evt::Event, seconds_elapsed: f64| -> Redraw) {
+        sdl_loop_timeout(self.win, seconds_max, process)
+    }
+}
+
 fn init_common(w: WindowOpts) -> Result<(~vid::Window, ~vid::GLContext), ~str> {
 
     let WindowOpts{ width, height } = w;
@@ -1018,32 +1041,42 @@ fn init_common(w: WindowOpts) -> Result<(~vid::Window, ~vid::GLContext), ~str> {
     Ok((win, ctxt))
 }
 
-fn gl_superbible_1() -> Result<(), ~str> {
-    let (win, _ctxt) = try!(init_common(WindowOpts{ width: 800,
-                                                    height: 800 }));
-
+fn sdl_loop_timeout(win: &vid::Window,
+                    seconds_max: f64,
+                    process: |e: evt::Event, seconds_elapsed: f64| -> Redraw) {
     let loop_start_time = time::precise_time_s();
     loop {
-        match evt::poll_event() {
+        let e = evt::poll_event();
+        let elapsed;
+        match e {
             evt::QuitEvent(_) | evt::KeyUpEvent(_, _, key::EscapeKey, _, _)
                 => break,
             _ => {
                 let time = time::precise_time_s();
-                if (time - loop_start_time) > 10.0 {
+                elapsed = time - loop_start_time;
+                if elapsed > seconds_max {
                     break
                 }
             }
         }
+        match process(e, elapsed) {
+            Redraw => win.gl_swap_window(),
+            RedrawUnnecessary => {}
+        }
+    }
+}
 
-        let time = time::precise_time_s();
-        let currentTime = time - loop_start_time;
+fn gl_superbible_1() -> Result<(), ~str> {
+    let (win, _ctxt) = try!(init_common(WindowOpts{ width: 800,
+                                                    height: 800 }));
+
+    sdl_loop_timeout(win, 10.0, |_, currentTime| {
         let color: [GLfloat, ..4] = [(currentTime.sin() * 0.5 + 0.5) as GLfloat,
                                      (currentTime.cos() * 0.5 + 0.5) as GLfloat,
                                      0.0, 1.0];
         unsafe { gl::ClearBufferfv(gl::COLOR, 0, &color[0]); }
-
-        win.gl_swap_window();
-    }
+        Redraw
+    });
 
     Ok(())
 }
