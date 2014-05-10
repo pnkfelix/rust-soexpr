@@ -1160,17 +1160,24 @@ fn gl_superbible_3() -> Result<(), ~str> {
 
     let mut vs : VSB = ShaderBuilder::new("#version 400");
     vs.global::<glsl::Vec4>("layout (location = 0) in", "offset");
+    vs.global::<glsl::Vec4>("layout (location = 1) in", "color");
+
+    vs.global::<glsl::Vec4>("out", "vs_color");
     vs.def_main(
         "const vec4 vertices[3] = vec4[3](
             vec4( 0.25, -0.25, 0.5, 1.0),
             vec4(-0.25, -0.25, 0.5, 1.0),
             vec4( 0.25,  0.25, 0.5, 1.0));
          // Add `offset` to our hard coded vertex position
-         gl_Position = vertices[gl_VertexID] + offset;");
+         gl_Position = vertices[gl_VertexID] + offset;
+         // Output a fixed value for vs_color
+         vs_color = color;
+    ");
 
     let mut fs : FSB = ShaderBuilder::new("#version 410 core"); // was 430
+    fs.global::<glsl::Vec4>("in", "vs_color");
     fs.global::<glsl::Vec4>("out", "color");
-    fs.def_main("color = vec4(0.0, 0.8, 1.0, 1.0);");
+    fs.def_main("color = vs_color;"); // vec4(0.0, 0.8, 1.0, 1.0);");
 
     let vs = vs.compile();
     let fs = fs.compile();
@@ -1182,16 +1189,20 @@ fn gl_superbible_3() -> Result<(), ~str> {
     va.bind();
 
     win.loop_timeout(10.0, |_, time| {
-        let color : [GLfloat, ..4] = [time.sin() as GLfloat * 0.5 + 0.5,
+        let bg_color : [GLfloat, ..4] = [time.sin() as GLfloat * 0.5 + 0.5,
                                       time.cos() as GLfloat * 0.5 + 0.5,
                                       0.0, 1.0];
-        unsafe { gl::ClearBufferfv(gl::COLOR, 0, &color[0]); }
+        unsafe { gl::ClearBufferfv(gl::COLOR, 0, &bg_color[0]); }
         program.use_program();
-        let attrib = [time.sin() as f32 * 0.5,
-                      time.cos() as f32 * 0.6,
-                      0.0, 0.0];
+        let offset_attrib = [time.sin() as f32 * 0.5,
+                             time.cos() as f32 * 0.6,
+                             0.0, 0.0];
         unsafe {
-            gl::VertexAttrib4fv(0, attrib.as_ptr());
+            gl::VertexAttrib4fv(0, offset_attrib.as_ptr());
+        }
+        let color_attrib = offset_attrib;
+        unsafe {
+            gl::VertexAttrib4fv(1, color_attrib.as_ptr());
         }
         gl::PointSize(10.0);
         gl::DrawArrays(gl::TRIANGLES, 0, 3);
