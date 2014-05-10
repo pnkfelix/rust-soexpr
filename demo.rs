@@ -191,7 +191,7 @@ pub mod glsl {
     /// Just use this to infer the type from the source attribute, under the assumption
     /// that the data source is (1.) tightly packed and (2.) contains no other data.
     pub struct Packed;
-    impl<T:ToGLSLType> VertexAttribPointerRTTI<T> for Packed {
+    impl<T:ToGLSLType2> VertexAttribPointerRTTI<T> for Packed {
         fn size(&self) -> GLint     { let d : T = Default::default(); d.count() }
         fn gl_type(&self) -> GLenum { let d : T = Default::default(); d.gl_type() }
         fn stride(&self) -> GLsizei { let d : T = Default::default(); d.stride() }
@@ -520,7 +520,9 @@ pub mod glsl {
     // on them
     pub trait ToGLSLType : Default {
         fn type_<'a>(&'a self) -> &'a str;
+    }
 
+    pub trait ToGLSLType2 : ToGLSLType {
         // (analogous to VertexAttribPointerRTTI but a little simpler)
         fn count(&self) -> GLint;
         fn gl_type(&self) -> GLenum;
@@ -535,6 +537,8 @@ pub mod glsl {
             impl Default for $RustName { fn default() -> $RustName { $RustName } }
             impl ToGLSLType for $RustName {
                 fn type_<'a>(&'a self) -> &'a str { stringify!($string) }
+            }
+            impl ToGLSLType2 for $RustName {
                 fn count(&self) -> GLint { $count }
                 fn gl_type(&self) -> GLenum { $glenum }
                 fn stride(&self) -> GLsizei { mem::size_of::<$rep>() as GLsizei }
@@ -1162,7 +1166,13 @@ fn gl_superbible_3() -> Result<(), ~str> {
     vs.global::<glsl::Vec4>("layout (location = 0) in", "offset");
     vs.global::<glsl::Vec4>("layout (location = 1) in", "color");
 
-    vs.global::<glsl::Vec4>("out", "vs_color");
+    #[deriving(Default)]
+    #[allow(non_camel_case_types)]
+    struct VS_OUT { color: glsl::Vec4 }
+    impl glsl::ToGLSLType for VS_OUT {
+        fn type_<'a>(&'a self) -> &'a str { "VS_OUT { vec4 color; }" }
+    }
+    vs.global::<VS_OUT>("out", "vs_out");
     vs.def_main(
         "const vec4 vertices[3] = vec4[3](
             vec4( 0.25, -0.25, 0.5, 1.0),
@@ -1171,13 +1181,14 @@ fn gl_superbible_3() -> Result<(), ~str> {
          // Add `offset` to our hard coded vertex position
          gl_Position = vertices[gl_VertexID] + offset;
          // Output a fixed value for vs_color
-         vs_color = color;
+         vs_out.color = color;
     ");
 
     let mut fs : FSB = ShaderBuilder::new("#version 410 core"); // was 430
     fs.global::<glsl::Vec4>("in", "vs_color");
+    fs.global::<VS_OUT>("in", "fs_in");
     fs.global::<glsl::Vec4>("out", "color");
-    fs.def_main("color = vs_color;"); // vec4(0.0, 0.8, 1.0, 1.0);");
+    fs.def_main("color = fs_in.color;"); // vec4(0.0, 0.8, 1.0, 1.0);");
 
     let vs = vs.compile();
     let fs = fs.compile();
