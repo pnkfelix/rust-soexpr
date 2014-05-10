@@ -462,6 +462,11 @@ pub mod glsl {
         lines: Vec<~str>
     }
 
+    pub struct TessellationControlShaderBuilder {
+        header: ~str,
+        lines: Vec<~str>
+    }
+
     impl VertexShaderBuilder {
         pub fn compile(&self) -> VertexShader {
             // println!("compiling VS: {:s}", self.lines.concat());
@@ -573,8 +578,20 @@ pub mod glsl {
             ShaderBuilder::new("#version 150 core")
         }
 
-        fn clear(&mut self);
-        fn push<S:Str>(&mut self, line: S);
+        fn header<'a>(&'a self) -> &'a str;
+        fn lines<'a>(&'a mut self) -> &'a mut Vec<~str>;
+
+        fn clear(&mut self) {
+            let hdr = self.header().to_owned();
+            let lines = self.lines();
+            lines.clear();
+            lines.push(hdr);
+        }
+        fn push<S:Str>(&mut self, line: S) {
+            let lines = self.lines();
+            lines.push(line.into_owned());
+            lines.push(~"\n");
+        }
 
         fn global<T:ToGLSLType>(&mut self, qualifiers: &str, name: &str) -> Global<T> {
             let dummy_t : T = Default::default();
@@ -620,11 +637,11 @@ pub mod glsl {
         /// use via e.g. VertexShaderBuilder::new("#version 150 core")
         fn new<S:Str>(version_string: S) -> FragmentShaderBuilder {
             let hdr = version_string.into_owned() + "\n";
-            FragmentShaderBuilder {
-                header: hdr.clone(),
-                lines: vec!(hdr),
-            }
+            FragmentShaderBuilder { header: hdr.clone(), lines: vec!(hdr) }
         }
+
+        fn header<'a>(&'a self) -> &'a str { self.header.as_slice() }
+        fn lines<'a>(&'a mut self) -> &'a mut Vec<~str> { &mut self.lines }
 
         fn clear(&mut self) {
             self.lines.clear();
@@ -640,21 +657,21 @@ pub mod glsl {
     impl ShaderBuilder for VertexShaderBuilder {
         fn new<S:Str>(version_string: S) -> VertexShaderBuilder {
             let hdr = version_string.into_owned() + "\n";
-            VertexShaderBuilder {
-                header: hdr.clone(),
-                lines: vec!(hdr),
-            }
+            VertexShaderBuilder { header: hdr.clone(), lines: vec!(hdr) }
         }
 
-        fn clear(&mut self) {
-            self.lines.clear();
-            self.lines.push(self.header.clone());
-        }
+        fn header<'a>(&'a self) -> &'a str { self.header.as_slice() }
+        fn lines<'a>(&'a mut self) -> &'a mut Vec<~str> { &mut self.lines }
+    }
 
-        fn push<S:Str>(&mut self, line: S) {
-            self.lines.push(line.into_owned());
-            self.lines.push(~"\n");
+    impl ShaderBuilder for TessellationControlShaderBuilder {
+        fn new<S:Str>(version_string: S) -> TessellationControlShaderBuilder {
+            let hdr = version_string.into_owned() + "\n";
+            TessellationControlShaderBuilder {
+                header: hdr.clone(), lines: vec!(hdr) }
         }
+        fn header<'a>(&'a self) -> &'a str { self.header.as_slice() }
+        fn lines<'a>(&'a mut self) -> &'a mut Vec<~str> { &mut self.lines }
     }
 
     pub trait ContentFiller {
