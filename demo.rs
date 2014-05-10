@@ -110,6 +110,7 @@ fn dispatch(driver: &str, variant: &str, args: &[~str]) -> Result<(), ~str> {
         ("glsl-cookbook", Some(s)) if "3".equiv(s) => glsl_cookbook_3(),
         ("gl-superbible", Some(s)) if "1".equiv(s) => gl_superbible_1(),
         ("gl-superbible", Some(s)) if "2".equiv(s) => gl_superbible_2(),
+        ("gl-superbible", Some(s)) if "3".equiv(s) => gl_superbible_3(),
         _otherwise                      => fail!("Unrecognized variant: {}", variant),
     }
 }
@@ -1110,6 +1111,7 @@ fn gl_superbible_1() -> Result<(), ~str> {
 fn gl_superbible_2() -> Result<(), ~str> {
     use VSB = self::glsl::VertexShaderBuilder;
     use FSB = self::glsl::FragmentShaderBuilder;
+
     use glsl::ShaderBuilder;
 
     let mut win = try!((WindowOpts{ width: 800, height: 800}).init());
@@ -1131,6 +1133,8 @@ fn gl_superbible_2() -> Result<(), ~str> {
     let fs = fs.compile();
     let program = glsl::Program::new(&vs, &fs);
 
+    // Even though this is unused, you still need to create and bind
+    // it for the program to know to apply the vertex shadrs.
     let mut va = VertexArray::new();
     va.bind();
 
@@ -1140,6 +1144,55 @@ fn gl_superbible_2() -> Result<(), ~str> {
                                      0.0, 1.0];
         unsafe { gl::ClearBufferfv(gl::COLOR, 0, &color[0]); }
         program.use_program();
+        gl::PointSize(10.0);
+        gl::DrawArrays(gl::TRIANGLES, 0, 3);
+        Redraw
+    })
+}
+
+fn gl_superbible_3() -> Result<(), ~str> {
+    use VSB = self::glsl::VertexShaderBuilder;
+    use FSB = self::glsl::FragmentShaderBuilder;
+
+    use glsl::ShaderBuilder;
+
+    let mut win = try!((WindowOpts{ width: 800, height: 800 }).init());
+
+    let mut vs : VSB = ShaderBuilder::new("#version 400");
+    vs.global::<glsl::Vec4>("layout (location = 0) in", "offset");
+    vs.def_main(
+        "const vec4 vertices[3] = vec4[3](
+            vec4( 0.25, -0.25, 0.5, 1.0),
+            vec4(-0.25, -0.25, 0.5, 1.0),
+            vec4( 0.25,  0.25, 0.5, 1.0));
+         // Add `offset` to our hard coded vertex position
+         gl_Position = vertices[gl_VertexID] + offset;");
+
+    let mut fs : FSB = ShaderBuilder::new("#version 410 core"); // was 430
+    fs.global::<glsl::Vec4>("out", "color");
+    fs.def_main("color = vec4(0.0, 0.8, 1.0, 1.0);");
+
+    let vs = vs.compile();
+    let fs = fs.compile();
+    let program = glsl::Program::new(&vs, &fs);
+
+    // Even though this is unused, you still need to create and bind
+    // it for the program to know to apply the vertex shaders.
+    let mut va = VertexArray::new();
+    va.bind();
+
+    win.loop_timeout(10.0, |_, time| {
+        let color : [GLfloat, ..4] = [time.sin() as GLfloat * 0.5 + 0.5,
+                                      time.cos() as GLfloat * 0.5 + 0.5,
+                                      0.0, 1.0];
+        unsafe { gl::ClearBufferfv(gl::COLOR, 0, &color[0]); }
+        program.use_program();
+        let attrib = [time.sin() as f32 * 0.5,
+                      time.cos() as f32 * 0.6,
+                      0.0, 0.0];
+        unsafe {
+            gl::VertexAttrib4fv(0, attrib.as_ptr());
+        }
         gl::PointSize(10.0);
         gl::DrawArrays(gl::TRIANGLES, 0, 3);
         Redraw
