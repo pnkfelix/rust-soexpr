@@ -111,6 +111,7 @@ fn dispatch(driver: &str, variant: &str, args: &[~str]) -> Result<(), ~str> {
         ("gl-superbible", Some(s)) if "1".equiv(s) => gl_superbible_1(),
         ("gl-superbible", Some(s)) if "2".equiv(s) => gl_superbible_2(),
         ("gl-superbible", Some(s)) if "3".equiv(s) => gl_superbible_3(),
+        ("gl-superbible", Some(s)) if "4".equiv(s) => gl_superbible_4(),
         _otherwise                      => fail!("Unrecognized variant: {}", variant),
     }
 }
@@ -139,6 +140,36 @@ pub mod glsl {
 
     pub struct FragmentShader {
         name: GLuint,
+    }
+
+    pub struct TesselationControlShader {
+        name: GLuint,
+    }
+
+    pub struct TesselationEvaluationShader {
+        name: GLuint,
+    }
+
+    impl Shader for VertexShader {
+        fn new(name: GLuint) -> VertexShader { VertexShader { name: name } }
+        fn name(&self) -> GLuint { self.name }
+    }
+
+    impl Shader for FragmentShader {
+        fn new(name: GLuint) -> FragmentShader { FragmentShader { name: name } }
+        fn name(&self) -> GLuint { self.name }
+    }
+
+    impl Shader for TesselationControlShader {
+        fn new(name: GLuint) -> TesselationControlShader {
+            TesselationControlShader { name: name } }
+        fn name(&self) -> GLuint { self.name }
+    }
+
+    impl Shader for TesselationEvaluationShader {
+        fn new(name: GLuint) -> TesselationEvaluationShader {
+            TesselationEvaluationShader { name: name } }
+        fn name(&self) -> GLuint { self.name }
     }
 
     pub struct ProgramBuilder {
@@ -342,11 +373,20 @@ pub mod glsl {
     }
 
     impl ProgramBuilder {
-        pub fn new(vs: &VertexShader, fs: &FragmentShader) -> ProgramBuilder {
+        pub fn new_unattached() -> ProgramBuilder {
             let program = gl::CreateProgram();
-            gl::AttachShader(program, vs.name);
-            gl::AttachShader(program, fs.name);
             ProgramBuilder { name: program }
+        }
+
+        pub fn new(vs: &VertexShader, fs: &FragmentShader) -> ProgramBuilder {
+            let mut pb = ProgramBuilder::new_unattached();
+            pb.attach_shader(vs);
+            pb.attach_shader(fs);
+            pb
+        }
+
+        pub fn attach_shader<SHDR:Shader>(&mut self, s: &SHDR) {
+            gl::AttachShader(self.name, s.name());
         }
 
         pub fn link(self) -> Result<Program, (ProgramBuilder, ~str)> {
@@ -467,6 +507,11 @@ pub mod glsl {
         lines: Vec<~str>
     }
 
+    pub struct TessellationEvaluationShaderBuilder {
+        header: ~str,
+        lines: Vec<~str>
+    }
+
     impl VertexShaderBuilder {
         pub fn compile(&self) -> VertexShader {
             // println!("compiling VS: {:s}", self.lines.concat());
@@ -570,13 +615,31 @@ pub mod glsl {
         name: ~str,
     }
 
-    pub trait ShaderBuilder {
+    pub trait Shader {
+        fn new(name: GLuint) -> Self;
+        fn name(&self) -> GLuint;
+    }
+
+    pub trait ShaderBuilder<SHDR:Shader> {
         /// use via e.g. VertexShaderBuilder::new("#version 150 core")
         fn new<S:Str>(version_string: S) -> Self;
 
         fn new_150core() -> Self {
             ShaderBuilder::new("#version 150 core")
         }
+
+        fn shader_type(&self) -> GLenum;
+
+        fn compile(&mut self) -> SHDR {
+            // println!("compiling VS: {:s}", self.lines.concat());
+            let type_ = self.shader_type();
+            let lines : Vec<_> =
+                self.lines().iter().map(|s|s.as_slice()).collect();
+            let name =
+                super::compile_shader(lines.as_slice(), type_);
+            Shader::new(name)
+        }
+
 
         fn header<'a>(&'a self) -> &'a str;
         fn lines<'a>(&'a mut self) -> &'a mut Vec<~str>;
@@ -633,7 +696,7 @@ pub mod glsl {
     }
 
 
-    impl ShaderBuilder for FragmentShaderBuilder {
+    impl ShaderBuilder<FragmentShader> for FragmentShaderBuilder {
         /// use via e.g. VertexShaderBuilder::new("#version 150 core")
         fn new<S:Str>(version_string: S) -> FragmentShaderBuilder {
             let hdr = version_string.into_owned() + "\n";
@@ -642,6 +705,7 @@ pub mod glsl {
 
         fn header<'a>(&'a self) -> &'a str { self.header.as_slice() }
         fn lines<'a>(&'a mut self) -> &'a mut Vec<~str> { &mut self.lines }
+        fn shader_type(&self) -> GLenum { gl::FRAGMENT_SHADER }
 
         fn clear(&mut self) {
             self.lines.clear();
@@ -654,7 +718,7 @@ pub mod glsl {
         }
     }
 
-    impl ShaderBuilder for VertexShaderBuilder {
+    impl ShaderBuilder<VertexShader> for VertexShaderBuilder {
         fn new<S:Str>(version_string: S) -> VertexShaderBuilder {
             let hdr = version_string.into_owned() + "\n";
             VertexShaderBuilder { header: hdr.clone(), lines: vec!(hdr) }
@@ -662,9 +726,12 @@ pub mod glsl {
 
         fn header<'a>(&'a self) -> &'a str { self.header.as_slice() }
         fn lines<'a>(&'a mut self) -> &'a mut Vec<~str> { &mut self.lines }
+
+        fn shader_type(&self) -> GLenum { gl::VERTEX_SHADER }
     }
 
-    impl ShaderBuilder for TessellationControlShaderBuilder {
+    impl ShaderBuilder<TesselationControlShader>
+        for TessellationControlShaderBuilder {
         fn new<S:Str>(version_string: S) -> TessellationControlShaderBuilder {
             let hdr = version_string.into_owned() + "\n";
             TessellationControlShaderBuilder {
@@ -672,6 +739,19 @@ pub mod glsl {
         }
         fn header<'a>(&'a self) -> &'a str { self.header.as_slice() }
         fn lines<'a>(&'a mut self) -> &'a mut Vec<~str> { &mut self.lines }
+        fn shader_type(&self) -> GLenum { gl::TESS_CONTROL_SHADER }
+    }
+
+    impl ShaderBuilder<TesselationEvaluationShader>
+        for TessellationEvaluationShaderBuilder {
+        fn new<S:Str>(version_string: S) -> TessellationEvaluationShaderBuilder {
+            let hdr = version_string.into_owned() + "\n";
+            TessellationEvaluationShaderBuilder {
+                header: hdr.clone(), lines: vec!(hdr) }
+        }
+        fn header<'a>(&'a self) -> &'a str { self.header.as_slice() }
+        fn lines<'a>(&'a mut self) -> &'a mut Vec<~str> { &mut self.lines }
+        fn shader_type(&self) -> GLenum { gl::TESS_EVALUATION_SHADER }
     }
 
     pub trait ContentFiller {
@@ -1234,6 +1314,102 @@ fn gl_superbible_3() -> Result<(), ~str> {
         }
         gl::PointSize(10.0);
         gl::DrawArrays(gl::TRIANGLES, 0, 3);
+        Redraw
+    })
+}
+
+fn gl_superbible_4() -> Result<(), ~str> {
+    use VSB = self::glsl::VertexShaderBuilder;
+    use FSB = self::glsl::FragmentShaderBuilder;
+    use TCSB = self::glsl::TessellationControlShaderBuilder;
+    use TESB = self::glsl::TessellationEvaluationShaderBuilder;
+
+    use glsl::ShaderBuilder;
+
+    let mut win = try!((WindowOpts{ width: 800, height: 800 }).init());
+
+    let mut vs : VSB = ShaderBuilder::new("#version 400");
+    vs.global::<glsl::Vec4>("layout (location = 0) in", "offset");
+    vs.global::<glsl::Vec4>("layout (location = 1) in", "color");
+
+    #[deriving(Default)]
+    #[allow(non_camel_case_types)]
+    struct VS_OUT { color: glsl::Vec4 }
+    impl glsl::ToGLSLType for VS_OUT {
+        fn type_<'a>(&'a self) -> &'a str { "VS_OUT { vec4 color; }" }
+    }
+    vs.def_main(
+        "const vec4 vertices[3] = vec4[3](
+            vec4( 0.25, -0.25, 0.5, 1.0),
+            vec4(-0.25, -0.25, 0.5, 1.0),
+            vec4( 0.25,  0.25, 0.5, 1.0));
+         // Add `offset` to our hard coded vertex position
+         gl_Position = vertices[gl_VertexID] + offset;
+    ");
+
+    let mut tcs : TCSB = ShaderBuilder::new("#version 410 core"); // was 430 core
+    // tcs.global::<VS_OUT>("out", "vs_out");
+    tcs.push("layout (vertices = 3) out;");
+    tcs.def_main(
+        "if (gl_InvocationID == 0) {
+            gl_TessLevelInner[0] = 5.0;
+            gl_TessLevelOuter[0] = 5.0;
+            gl_TessLevelOuter[1] = 5.0;
+            gl_TessLevelOuter[2] = 5.0;
+        }
+        gl_out[gl_InvocationID].gl_Position =
+            gl_in[gl_InvocationID].gl_Position;");
+
+    let mut tes : TESB = ShaderBuilder::new("#version 410 core"); // was 430 core
+    tes.push("layout (triangles, equal_spacing, cw) in;");
+    tes.def_main(
+        "gl_Position = (gl_TessCoord.x * gl_in[0].gl_Position +
+                        gl_TessCoord.y * gl_in[1].gl_Position +
+                        gl_TessCoord.z * gl_in[2].gl_Position);");
+
+
+    let mut fs : FSB = ShaderBuilder::new("#version 410 core"); // was 430
+    fs.global::<glsl::Vec4>("out", "color");
+    fs.def_main("color = vec4(0.0, 0.8, 1.0, 1.0);");
+
+    let vs = vs.compile();
+    let fs = fs.compile();
+    let tcs = tcs.compile();
+    let tes = tes.compile();
+    let mut pbldr = glsl::ProgramBuilder::new(&vs, &fs);
+    pbldr.attach_shader(&tcs);
+    pbldr.attach_shader(&tes);
+    let program = pbldr.link();
+    let program = match program {
+        Ok(p) => p,
+        Err((_pb, s)) => fail!("link failed {}", s),
+    };
+
+    // Even though this is unused, you still need to create and bind
+    // it for the program to know to apply the vertex shaders.
+    let mut va = VertexArray::new();
+    va.bind();
+
+    gl::PolygonMode(gl::FRONT_AND_BACK, gl::LINE);
+
+    win.loop_timeout(10.0, |_, time| {
+        let bg_color : [GLfloat, ..4] = [time.sin() as GLfloat * 0.5 + 0.5,
+                                      time.cos() as GLfloat * 0.5 + 0.5,
+                                      0.0, 1.0];
+        unsafe { gl::ClearBufferfv(gl::COLOR, 0, &bg_color[0]); }
+        program.use_program();
+        let offset_attrib = [time.sin() as f32 * 0.5,
+                             time.cos() as f32 * 0.6,
+                             0.0, 0.0];
+        unsafe {
+            gl::VertexAttrib4fv(0, offset_attrib.as_ptr());
+        }
+        let color_attrib = offset_attrib;
+        unsafe {
+            gl::VertexAttrib4fv(1, color_attrib.as_ptr());
+        }
+        // gl::PointSize(10.0);
+        gl::DrawArrays(gl::PATCHES, 0, 3);
         Redraw
     })
 }
